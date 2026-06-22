@@ -8,6 +8,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<!-- Preload critical font to reduce layout shift -->
+<link rel="preload" as="font" type="font/woff2" href="https://fonts.gstatic.com/s/spacegrotesk/v11/V8mDoQDjQSkFtoMM3T6r8E7mF71Q-gOoraIAEj7oUXskMg.woff2" crossorigin>
 <style>
   :root{
     --bg:#0b0c0e;
@@ -524,9 +526,9 @@
       </footer>
     </section>
   </main>
-</div>
+ </div>
 
-<script>
+<script defer>
 (function(){
   var reduce = matchMedia('(prefers-reduced-motion:reduce)').matches;
   var hook = document.getElementById('hook');
