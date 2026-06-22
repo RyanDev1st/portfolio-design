@@ -8,8 +8,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-<!-- Preload critical font to reduce layout shift -->
-<link rel="preload" as="font" type="font/woff2" href="https://fonts.gstatic.com/s/spacegrotesk/v11/V8mDoQDjQSkFtoMM3T6r8E7mF71Q-gOoraIAEj7oUXskMg.woff2" crossorigin>
 <style>
   :root{
     --bg:#0b0c0e;
@@ -286,7 +284,7 @@
     <section class="hero" id="top" aria-label="Ryan portfolio hero">
          <div class="hero__portrait">
          <div class="portrait-frame" id="portrait-frame">
-           <img class="portrait-img" src="mpoefjqc-portrait.png" alt="Portrait of Ryan" decoding="async" width="400" height="510" />
+           <img class="portrait-img" src="portrait-cut.png" alt="Portrait of Ryan" decoding="async" />
           <div class="portrait-pixel-gate" id="portrait-pixel-gate" aria-hidden="true"></div>
 <pre class="face-ascii" id="face-ascii" aria-hidden="true">
                                             @@   @         @@@@@@@@@
@@ -528,7 +526,7 @@
   </main>
  </div>
 
-<script defer>
+<script>
 (function(){
   var reduce = matchMedia('(prefers-reduced-motion:reduce)').matches;
   var hook = document.getElementById('hook');
