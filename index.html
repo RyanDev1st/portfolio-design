@@ -2137,7 +2137,13 @@
     if(sfxReady) return; sfxReady = true;
     var bases = {}; for(var k in SFX_SRC) bases[SFX_SRC[k]] = 1;
     Object.keys(bases).forEach(function(base){
-      var list = []; for(var i=0;i<3;i++){ var a = new Audio('assets/sfx/'+base+'.wav'); a.preload='auto'; list.push(a); }
+      // preload='none', NOT 'auto'. The pool is 3 elements per cue for overlap, and with
+      // 'auto' the browser fetched EACH one separately = the same 15 files downloaded 3x
+      // (~1254KB instead of ~420KB) - and initSfxFiles is triggered by the reveal's own
+      // 'dissolve' cue, so that burst landed straight in the hero reveal (the live stutter).
+      // With 'none' a cue fetches only when first played (a few KB each), and warmPool()
+      // below pre-warms them on idle AFTER the reveal so there is no first-play lag.
+      var list = []; for(var i=0;i<3;i++){ var a = new Audio('assets/sfx/'+base+'.wav'); a.preload='none'; list.push(a); }
       sfxPool[base] = { list:list, i:0 };
     });
   }
@@ -2168,6 +2174,14 @@
   // reveal = the live-site stutter. Deferring is safe because autoplay unlock is STICKY per
   // document: once the visitor has activated the page, a later play() is still allowed (and
   // bedSet's own `pending` + the bedRetry gesture listener remain as a backstop either way).
+  // Warm ONE element per cue once the reveal is over: that single fetch populates the HTTP
+  // cache, so the other two pool elements (and every later cue) resolve instantly without
+  // ever issuing the 3x-duplicate download that 'auto' caused.
+  var poolWarmed=false;
+  function warmPool(){
+    if(poolWarmed || !sfxReady) return; poolWarmed=true;
+    for(var base in sfxPool){ try{ var a=sfxPool[base].list[0]; a.preload='auto'; a.load(); }catch(_){} }
+  }
   var bedsPrimed=false;
   function primeBeds(){
     if(bedsPrimed || !soundState.enabled) return; bedsPrimed=true;
@@ -2182,7 +2196,8 @@
   function primeBedsLater(){
     if(bedsPrimed) return;
     setTimeout(function(){
-      if(window.requestIdleCallback) requestIdleCallback(primeBeds,{timeout:2500}); else primeBeds();
+      var go=function(){ primeBeds(); warmPool(); };
+      if(window.requestIdleCallback) requestIdleCallback(go,{timeout:2500}); else go();
     }, 3600);   // ~the full reveal (LEAD_HOLD+implode+pivot+explode ~3.1s) plus a beat
   }
   function playFile(kind){
