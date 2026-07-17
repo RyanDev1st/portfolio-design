@@ -1,0 +1,52 @@
+# secrets / local
+.env
+.env.*
+*.pem
+.claude/
+.agents/
+
+# throwaways / scratch
+scratch_*
+_*.png
+_*.jpg
+scratchpad/
+reference-research/
+tuner.html
+mp*.png
+*.tmp
+
+# capture + experiment output (regenerated, not source)
+aino-capture/
+output/
+*.broken.png
+
+# rejected / archived design iterations
+index-v1.html
+index-*-rejected.html
+index-prev-dark.html
+ryan-ai-harness-portfolio.html
+
+# portrait backups + source (only portrait-cut.png ships)
+portrait-cut.overfeathered.png
+mpoefjqc-portrait.png
+mpoeeioa-*.png
+portrait-ascii.txt
+
+# internal dev docs (not needed by the live site; may leak local paths)
+brand-spec.md
+critique.json
+DESIGN-HANDOFF.md
+DESIGN-MANIFEST.json
+CLAUDE.md
+AGENTS.md
+references/
+
+# caches / build
+__pycache__/
+*.pyc
+node_modules/
+dist/
+build/
+.DS_Store
+Thumbs.db
+desktop.ini

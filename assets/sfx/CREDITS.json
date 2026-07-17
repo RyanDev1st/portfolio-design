@@ -1,0 +1,38 @@
+[
+  {
+    "cue": "node",
+    "id": 130523,
+    "name": "F-low-2.WAV",
+    "user": "stomachache",
+    "license": "CC0"
+  },
+  {
+    "cue": "water",
+    "id": 137028,
+    "name": "Drain glug.wav",
+    "user": "majorasflask",
+    "license": "CC0"
+  },
+  {
+    "cue": "dissolve",
+    "id": 237607,
+    "name": "Glitch 01",
+    "user": "JacksonMiller0",
+    "license": "CC0"
+  },
+  {
+    "cue": "reform",
+    "id": 248143,
+    "name": "Coin Flip Shimmer",
+    "user": "dpren",
+    "license": "CC0"
+  },
+  {
+    "cue": "shard",
+    "id": 524376,
+    "name": "Lego (film-special-effects-lego)",
+    "user": "crochet_photo_video",
+    "license": "Pixabay Content License",
+    "source": "Pixabay"
+  }
+]
