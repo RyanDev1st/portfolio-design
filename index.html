@@ -230,7 +230,7 @@
   .portrait-frame{position:relative;width:100%;height:100%;overflow:visible}
   .portrait-frame picture{display:contents}   /* wrapper is layout-transparent: the absolute img still resolves to .portrait-frame */
   .portrait-img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;object-position:50% 0;z-index:0;
-    visibility:hidden;opacity:0;transform:scale(1.012);filter:contrast(1.03) saturate(1.02);will-change:opacity,filter,transform}
+    visibility:hidden;opacity:0;transform:scale(1.012);filter:contrast(1.03) saturate(1.02);will-change:opacity,transform}
   /* The photo carries NO mask now — the FX canvas above owns the whole reveal, so
      every "skip to photo" path (reload/fastEnter, reduced motion) just shows it.
      (A leftover --pr:0 photo mask is exactly what made reloads render nothing.) */
@@ -291,10 +291,15 @@
     transition:opacity .3s ease}
   .portrait-frame .ptag--lit.is-lit{opacity:1;animation:auroraFlow 4.2s linear infinite}
   @keyframes auroraFlow{0%{background-position:0% 50%}100%{background-position:260% 50%}}
+  /* COMPOSITOR-ONLY focus-in (transform + opacity, NO filter). This runs during the EXPLODE
+     phase (is-photo-live is set at the pivot), and the old version animated blur()+contrast()
+     on the 1086x1448 portrait - forcing a full GPU re-raster of a 2MP image EVERY frame while
+     the canvas is also folding the mosaic away. That was the measured layer-2 jank (11 janky
+     frames vs implode's 2). A scale-settle reads the same under the folding tiles and is free
+     (transform + opacity never leave the compositor, no raster). */
   @keyframes portraitPixelFocus{
-    0%{filter:contrast(1.45) saturate(.9) blur(1px);transform:scale(1.028)}
-    55%{filter:contrast(1.18) saturate(1.05) blur(.35px);transform:scale(1.01)}
-    100%{filter:contrast(1.03) saturate(1.02) blur(0);transform:scale(1)}
+    0%{transform:scale(1.028);opacity:.4}
+    100%{transform:scale(1);opacity:1}
   }
 
   .hero__lockup{position:absolute;left:30px;bottom:46px;z-index:3;max-width:80vw}
