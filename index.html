@@ -3016,24 +3016,38 @@
     disableSpot();                                         // the flip owns the canvas (no stray spotlight frames)
     buildFx();                                             // ensure the offscreens are sized/baked
     fxCtx.clearRect(0,0,faceFx.width,faceFx.height); faceFx.style.display='block';   // photo shows under the empty canvas during the lead hold
+    // One-shot completion guard + a HARD guarantee that landing in ascii NEVER keeps the
+    // photo layer on. If is-photo-live survives into ascii mode (a mid-timeline callback
+    // skipped by a live-network stall), the ascii-hover base (transparent roff) lets the
+    // still-visible photo bleed through the glyph gaps = the "portrait fused with ascii"
+    // bug. So fin() drops it unconditionally, and a watchdog forces fin() if the flip
+    // stalls (reverseRun had NO watchdog, unlike startPortraitReveal - that was the hole).
+    var finished=false;
+    function fin(){ if(finished) return; finished=true; if(revealWatch){ clearTimeout(revealWatch); revealWatch=0; }
+      if(faceFrame) faceFrame.classList.remove('is-photo-live'); if(done) done(); }
+    if(revealWatch){ clearTimeout(revealWatch); }
+    revealWatch=setTimeout(function(){ revealWatch=0; if(finished) return;
+      if(window.gsap && revealTL){ try{ revealTL.kill(); }catch(_){} }
+      drawRest(); fin();
+    }, (LEAD_HOLD+D_EXPLODE+PIVOT_HOLD+D_IMPLODE)*1000 + 1500);
     if(window.gsap){
-      var g=window.gsap, a={p:1}, b={p:1}, tl=g.timeline();
+      var g=window.gsap, a={p:1}, b={p:1}, tl=g.timeline(); revealTL=tl;
       tl.add(function(){ try{ playSound('reform'); }catch(_){} }, LEAD_HOLD);                                       // photo -> mosaic
       tl.to(a,{p:0,duration:D_EXPLODE,ease:E_MASTER,onUpdate:function(){ drawFx('explode',a.p); }}, LEAD_HOLD);
       tl.add(function(){ drawFx('explode',0); if(faceFrame) faceFrame.classList.remove('is-photo-live'); }, LEAD_HOLD+D_EXPLODE);  // full mosaic; drop the now-hidden photo
       tl.add(function(){ try{ playSound('dissolve'); }catch(_){} }, LEAD_HOLD+D_EXPLODE+PIVOT_HOLD);                // mosaic -> ascii
       tl.to(b,{p:0,duration:D_IMPLODE,ease:E_MASTER,onUpdate:function(){ drawFx('implode',b.p); }}, LEAD_HOLD+D_EXPLODE+PIVOT_HOLD);
-      tl.add(function(){ drawRest(); if(done) done(); }, LEAD_HOLD+D_EXPLODE+PIVOT_HOLD+D_IMPLODE);
+      tl.add(function(){ drawRest(); fin(); }, LEAD_HOLD+D_EXPLODE+PIVOT_HOLD+D_IMPLODE);
       return;
     }
     // no-GSAP fallback: rAF-drive the same phases, reversed.
     var LH=LEAD_HOLD*1000, D2=D_EXPLODE*1000, DH=PIVOT_HOLD*1000, D1=D_IMPLODE*1000, t0=performance.now(), c1=false, c2=false, dropped=false;
-    (function tick(now){ var e=now-t0;
+    (function tick(now){ var e=now-t0; if(finished) return;           // watchdog already finished it
       if(e<=LH){ requestAnimationFrame(tick); }                       // hold: photo stands (canvas empty)
       else if(e<=LH+D2){ if(!c1){ try{ playSound('reform'); }catch(_){} c1=true; } drawFx('explode', 1-easeMaster((e-LH)/D2)); requestAnimationFrame(tick); }
       else if(e<=LH+D2+DH){ if(!dropped){ drawFx('explode',0); faceFrame.classList.remove('is-photo-live'); dropped=true; } requestAnimationFrame(tick); }
       else if(e<=LH+D2+DH+D1){ if(!c2){ try{ playSound('dissolve'); }catch(_){} c2=true; } drawFx('implode', 1-easeMaster((e-LH-D2-DH)/D1)); requestAnimationFrame(tick); }
-      else { drawRest(); if(done) done(); }
+      else { drawRest(); fin(); }
     })(t0);
   }
   // Toggle: photo <-> ascii. Ignores clicks while a flip is running (portraitBusy).
@@ -3051,7 +3065,7 @@
     }
     portraitBusy=true;
     if(portraitMode==='photo'){
-      reverseRun(function(){ portraitMode='ascii'; portraitBusy=false; if(faceFrame) faceFrame.classList.add('is-ascii'); enableSpot(); });   // ascii mode keeps the hover spotlight (mosaic disc) + the aurora word
+      reverseRun(function(){ portraitMode='ascii'; portraitBusy=false; if(faceFrame){ faceFrame.classList.add('is-ascii'); faceFrame.classList.remove('is-photo-live'); } enableSpot(); });   // ascii mode keeps the hover spotlight (mosaic disc) + the aurora word. is-photo-live MUST be off here or the photo bleeds through the ascii base (the fusion bug)
     }else{
       startPortraitReveal(function(){ portraitMode='photo'; portraitBusy=false; });  // forward reveal ends on the photo + re-arms the spotlight
     }
@@ -3267,6 +3281,10 @@
     // ASCII (reverted) mode INVERTS the disc: the base is the B&W ascii and the disc
     // reveals the COLOUR MOSAIC (Ryan). PHOTO mode: base = photo, disc = B&W ascii.
     var ascii=(portraitMode==='ascii');
+    // Render-level guarantee: in ascii mode the photo layer must be OFF, else it bleeds
+    // through the transparent roff base below and fuses with the ascii (the live-only bug).
+    // Idempotent: touches the DOM only if a stray is-photo-live actually leaked in.
+    if(ascii && faceFrame && faceFrame.classList.contains('is-photo-live')) faceFrame.classList.remove('is-photo-live');
     fxCtx.clearRect(0,0,W,H);
     var R=SPOT_R*dpr*(0.62+0.38*spotA);            // disc scales up as it fades in (feels like it "lands")
     var cx=spotX*dpr, cy=spotY*dpr;
