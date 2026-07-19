@@ -2917,17 +2917,27 @@
     var off=(which==='implode')?roff:moff, delays=(which==='implode')?delayIn:delayOut;   // B&W layer = the photo-sampled ascii on transparent bg (roff), so the reveal matches the hover disc pixel-for-pixel with NO black box (Ryan)
     for(var ty=0;ty<TROWS;ty++){ for(var tx=0;tx<TCOLS;tx++){
       var sx=tx*tw, sy=ty*th, l=tileT(gp, delays[ty*TCOLS+tx]);
-      if(which==='implode' && l>0){                                   // hi-fi leaving here -> mosaic snaps into the cell
+      if(which==='implode' && l>0){                                   // hi-fi leaving here -> mosaic takes the cell
         var lr=Math.min(1, l*1.35);                                   // slight lead so the cell is never empty mid-flip
         if(lr>=1){ fxCtx.drawImage(moff, sx,sy,tw,th, sx,sy,tw,th); } // settled: plain blit, skip the matrix ops
         else { var mp=easeRise(lr);
-          fxCtx.save(); fxCtx.translate(sx+tw/2, sy+th/2); fxCtx.scale(1, mp);
+          // CROSSFADE (Ryan): the mosaic FADES UP as it rises instead of snapping in at
+          // full opacity. Mid-flip the cell used to carry the folding ascii AND a solid
+          // mosaic square stacked at 100% - two different media (116-col glyphs vs 72-col
+          // solid cells) visible in the same cell at once, which is exactly what read as
+          // the "fused" frame. Dissolving them past each other keeps ONE dominant medium
+          // at any instant. easeRise overshoots (back.out) so clamp before using as alpha.
+          fxCtx.save(); fxCtx.globalAlpha=Math.max(0,Math.min(1,mp));
+          fxCtx.translate(sx+tw/2, sy+th/2); fxCtx.scale(1, mp);
           fxCtx.drawImage(moff, sx,sy,tw,th, -tw/2,-th/2, tw,th); fxCtx.restore(); }
       }
       if(l>=1) continue;                                              // tile fully folded -> layer beneath stands
       if(l<=0){ fxCtx.drawImage(off, sx,sy,tw,th, sx,sy,tw,th); continue; }   // untouched: plain blit
       // back.in dips below 0 first => scale >1 => the tile PUFFS before it folds (anticipation).
-      fxCtx.save(); fxCtx.translate(sx+tw/2, sy+th/2); fxCtx.scale(1, 1-easeFold(l));
+      // The outgoing layer also fades out over its own flip (the other half of the
+      // crossfade), so it hands the cell over instead of both layers being fully opaque.
+      fxCtx.save(); fxCtx.globalAlpha=Math.max(0,Math.min(1,1-l*l));
+      fxCtx.translate(sx+tw/2, sy+th/2); fxCtx.scale(1, 1-easeFold(l));
       fxCtx.drawImage(off, sx,sy,tw,th, -tw/2,-th/2, tw,th); fxCtx.restore();
     }}
   }
