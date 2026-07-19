@@ -11,7 +11,7 @@
       install-time fetches never steal bandwidth from it.
    3. The fetch handler never caches heavy media (mp4/wav) — they are big, rarely re-fetched,
       and the response.clone() + cache write costs main-thread time mid-animation. */
-const CACHE = 'ryan-portfolio-v3';
+const CACHE = 'ryan-portfolio-v4';
 const CORE = [
   './',
   './index.html',
