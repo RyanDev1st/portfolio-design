@@ -2801,6 +2801,7 @@
 
   var hoff=document.createElement('canvas'), moff=document.createElement('canvas'), soff=document.createElement('canvas');
   var roff=document.createElement('canvas');   // reveal/rest B&W = the photo-sampled ascii on a TRANSPARENT bg (soff's opaque bg is a masking disc detail, not a full-frame backdrop)
+  var coff=document.createElement('canvas');   // ascii-mode spotlight = the SAME glyphs as roff, tinted with the portrait's real colour (same grid, so the disc never drops a foreign solid-mosaic blob into the ascii)
   var dpr=1, TCOLS=1, TROWS=1, delayIn=null, delayOut=null;
 
   function fxRect(){                            // rendered image rect (object-fit:contain, top-aligned)
@@ -2876,6 +2877,18 @@
     c.globalCompositeOperation='source-over'; c.clearRect(0,0,W,H);
     c.fillStyle='#050506'; c.fillRect(0,0,W,H);
     c.drawImage(roff,0,0);
+    // coff = the SAME ascii glyphs (roff) but lit in the portrait's real colour (moff),
+    // keeping each glyph's tonal brightness. So the ascii-mode spotlight makes the B&W
+    // glyphs GLOW IN COLOUR on the exact same grid as the base - never a foreign solid
+    // mosaic square dropped into the glyph field (that grid/medium mismatch was the
+    // "cringy fused blob" Ryan flagged). 'color' blend adopts moff's hue+chroma over
+    // roff's luma; destination-in re-masks to the glyph alpha so the gaps stay clear.
+    var cc=coff.getContext('2d');
+    cc.globalCompositeOperation='source-over'; cc.clearRect(0,0,W,H);
+    cc.drawImage(roff,0,0);
+    cc.globalCompositeOperation='color'; cc.drawImage(moff,0,0,moff.width,moff.height,0,0,W,H);
+    cc.globalCompositeOperation='destination-in'; cc.drawImage(roff,0,0);
+    cc.globalCompositeOperation='source-over';
   }
   function computeDelays(){
     delayIn=new Float32Array(TCOLS*TROWS); delayOut=new Float32Array(TCOLS*TROWS);
@@ -2892,7 +2905,7 @@
     faceFx.style.left=r.left+'px'; faceFx.style.top=r.top+'px';
     faceFx.style.width=r.w+'px';   faceFx.style.height=r.h+'px';
     var W=Math.max(2,Math.round(r.w*dpr)), H=Math.max(2,Math.round(r.h*dpr));
-    faceFx.width=W; faceFx.height=H; hoff.width=W; hoff.height=H; moff.width=W; moff.height=H; soff.width=W; soff.height=H; roff.width=W; roff.height=H;
+    faceFx.width=W; faceFx.height=H; hoff.width=W; hoff.height=H; moff.width=W; moff.height=H; soff.width=W; soff.height=H; roff.width=W; roff.height=H; coff.width=W; coff.height=H;
     renderMosaic(); renderSpot();   // renderHifi dropped: hoff (the hi-fi drawing) is no longer used — the reveal AND the spotlight now share the photo-sampled ascii (roff/soff)
     var tile=15*dpr; TCOLS=Math.max(12,Math.round(W/tile)); TROWS=Math.max(16,Math.round(H/tile));
     computeDelays();
@@ -3294,8 +3307,9 @@
     fxCtx.save();
     fxCtx.beginPath(); fxCtx.arc(cx,cy,R,0,Math.PI*2); fxCtx.clip();
     // The disc source, drawn src==dst so it aligns 1:1. PHOTO: opaque B&W ascii (soff)
-    // masks the photo. ASCII: the colour mosaic (moff) shows through the B&W base.
-    fxCtx.drawImage(ascii?moff:soff, bx,by,bw,bh, bx,by,bw,bh);
+    // masks the photo. ASCII: coff = the SAME glyphs as the base, but COLOUR-LIT, so the
+    // disc reads as the ascii glowing in colour on one grid - NOT a solid mosaic blob.
+    fxCtx.drawImage(ascii?coff:soff, bx,by,bw,bh, bx,by,bw,bh);
     // AURORA STREAMS ride INSIDE this clip and BEFORE the mask below, so they punch
     // through the disc and can never spill onto the photo / off the disc.
     drawAurora();
