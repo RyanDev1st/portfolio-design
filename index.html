@@ -73,11 +73,12 @@
   body{
     background:var(--bg);color:var(--fg);font-family:var(--disp);font-weight:400;
     -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
-    overflow-x:hidden;cursor:none;
+    overflow-x:hidden;
     -webkit-tap-highlight-color:transparent;   /* kill the grey tap-flash on touch */
   }
+  /* the native cursor is hidden by `html.cur-on`, which JS sets only for a real mouse, so a
+     touch device or a no-JS load never ends up with no pointer at all */
   body.hook-active{overflow:hidden}
-  body.site-ready{cursor:auto}
   a{color:inherit;text-decoration:none}
   button{font:inherit;color:inherit}
   a:focus-visible,button:focus-visible,.hook:focus-visible{outline:1px solid var(--signal);outline-offset:5px}
@@ -96,13 +97,76 @@
   @media (hover:none){::-webkit-scrollbar{width:0;height:0}}
   .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
 
-  .cursor{position:fixed;top:0;left:0;width:12px;height:12px;border-radius:50%;
-    background:#fff;mix-blend-mode:difference;pointer-events:none;z-index:1600;
-    transform:translate(-50%,-50%);transition:width .25s,height .25s,opacity .25s;opacity:.7}
-  .cursor.link{width:34px;height:34px;opacity:.56}
-  body.site-ready .cursor{display:none}
-  body.site-ready a,body.site-ready button{cursor:pointer}
-  @media (hover:none){.cursor{display:none}body{cursor:auto}}
+  /* ---- CURSOR ----
+     One design for the entire visit. It used to exist only during the hook and then hand back
+     to the OS arrow, so the intro, the hook and the page each had a different pointer: three
+     cursors in one minute (Ryan). Now it is armed once and never handed back.
+     Two parts, because one dot cannot carry state. The DOT is written straight from the
+     pointer event, so it is pixel exact and never lags. The RING springs after it and is where
+     every state reads: idle, over something interactive, pressing, over text.
+     `cur-on` is set by JS only for a real mouse, so touch and no-JS keep the native cursor and
+     the `!important` never reaches anyone who needs the system pointer. It has to be that
+     blunt: dozens of controls set their own `cursor:pointer`, and any of them showing an arrow
+     next to the custom one is exactly the inconsistency this replaces. */
+  /* z-index above EVERYTHING, including the boot gate (2000) and the intro overlay. Anything
+     that outranks it makes the cursor vanish over that surface, which is exactly where the
+     visitor is being asked to click. */
+  .cursor{position:fixed;top:0;left:0;pointer-events:none;z-index:99999;opacity:0;
+    transition:opacity .25s ease}
+  html.cur-on .cursor{opacity:1}
+  html.cur-on,html.cur-on *{cursor:none!important}
+  .cursor b{position:fixed;top:0;left:0;display:block;border-radius:50%;
+    transform:translate(-50%,-50%);will-change:transform}
+  /* CONTRAST. The first pass was a 6px dot inside a 1px 34%-opacity ring, which on a near
+     black page was almost nothing: fine if you are already tracking it, invisible if your
+     attention wanders. The dot is bigger and blends by difference so it inverts against
+     whatever is under it, and the ring is a solid 2px at high opacity with a dark outer edge
+     so it holds up over the portrait and the bright imagery too. */
+  .cursor__dot{width:8px;height:8px;background:#fff;mix-blend-mode:difference;
+    transition:width .18s ease,height .18s ease,opacity .18s ease}
+  .cursor__ring{width:30px;height:30px;border:2px solid rgba(236,231,219,.72);
+    box-shadow:0 0 0 1px rgba(0,0,0,.35), 0 2px 10px rgba(0,0,0,.35);
+    transition:width .3s cubic-bezier(.34,1.56,.64,1),height .3s cubic-bezier(.34,1.56,.64,1),
+      border-color .2s ease,background .2s ease,border-radius .2s ease,opacity .2s ease,
+      box-shadow .2s ease}
+  /* PARTIAL RED HIGHLIGHT (Ryan). The pale ring disappears where it crosses bright content -
+     the RYAN wordmark, a light project shot - and only THOSE parts of the ring vanish, so the
+     fix has to be per pixel, not per element. This is a second ring in signal red set to
+     `mix-blend-mode:darken`: darken keeps the channel-wise minimum, so over the near-black page
+     it resolves to the page and is invisible, and over anything light it resolves to the red.
+     The two rings are exact complements. Whichever part of the ring the pale one loses, the red
+     one takes, so the arc is always complete and the red appears exactly on the blended
+     segment. No JS, no sampling, no per-frame work. */
+  .cursor__lit{position:absolute;inset:-2px;border-radius:50%;border:2px solid var(--signal);
+    mix-blend-mode:darken;pointer-events:none}
+  /* HOVER: the ring opens up, takes the accent and LIGHTS. The dot shrinks so the ring is the
+     subject. The glow is what makes it findable from the corner of the eye. */
+  .cursor.is-link .cursor__ring{width:46px;height:46px;border-color:var(--signal);
+    background:rgba(255,42,18,.1);
+    box-shadow:0 0 0 1px rgba(0,0,0,.35), 0 0 22px rgba(255,42,18,.45)}
+  .cursor.is-link .cursor__dot{width:5px;height:5px}
+  /* PRESS: it collapses inward and fills. Reads as the click landing, not as a hover ending. */
+  .cursor.is-down .cursor__ring{width:22px;height:22px;border-color:var(--signal);
+    background:rgba(255,42,18,.3);box-shadow:0 0 0 1px rgba(0,0,0,.35), 0 0 26px rgba(255,42,18,.6)}
+  .cursor.is-down .cursor__dot{width:11px;height:11px}
+  /* TEXT: hiding the native pointer would also hide the I-beam, so the ring becomes a slim
+     I-beam over anything you can actually type into. Kept SHORT (18px, roughly a line) and set
+     to difference blend: the earlier 24px bar plus the browser's own blinking caret underneath
+     read as a giant flashing line whenever you clicked a word (Ryan). The native one is now
+     suppressed everywhere except real fields, so there is only ever one caret on screen. */
+  .cursor.is-text .cursor__ring{width:2px;height:18px;border-radius:1px;
+    background:#fff;border-color:transparent;mix-blend-mode:difference;box-shadow:none}
+  .cursor.is-text .cursor__lit{display:none}
+  .cursor.is-text .cursor__dot{opacity:0}
+  /* No stray browser caret. Clicking a word in body copy could leave Chrome's blinking insertion
+     caret behind, which with the pointer hidden looked like the site had spawned a huge cursor.
+     Real fields keep theirs, in the accent. */
+  html.cur-on{caret-color:transparent}
+  html.cur-on input,html.cur-on textarea,html.cur-on [contenteditable="true"]{caret-color:var(--signal)}
+  /* off-window */
+  .cursor.is-out{opacity:0}
+  @media (hover:none){.cursor{display:none}}
+  @media (prefers-reduced-motion:reduce){.cursor b{transition:none}}
   .skip-link{position:fixed;top:14px;left:14px;z-index:1200;transform:translateY(-150%);
     background:var(--fg);color:var(--bg);padding:10px 12px;font-family:var(--mono);
     font-size:11px;letter-spacing:.1em;text-transform:uppercase;transition:transform .18s}
@@ -662,8 +726,10 @@
   .ide__bar{display:flex;align-items:center;gap:10px;padding:10px 13px;
     background:linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,.015));
     border-bottom:1px solid rgba(255,255,255,.07)}
-  .ide .lamps{display:flex;gap:7px}
-  .ide .lamps i{width:11px;height:11px;border-radius:50%;display:block}
+  /* decorative lamps (intro, boot gate): sized to match the interactive set in the panels so
+     every window in the family wears the same chrome */
+  .ide .lamps{display:flex;gap:9px}
+  .ide .lamps i{width:13px;height:13px;border-radius:50%;display:block}
   .ide .lamps i:nth-child(1){background:radial-gradient(circle at 35% 30%, #ff8b84, #ff5f57)}
   .ide .lamps i:nth-child(2){background:radial-gradient(circle at 35% 30%, #ffd479, #febc2e)}
   .ide .lamps i:nth-child(3){background:radial-gradient(circle at 35% 30%, #6fe08a, #28c840)}
@@ -1065,23 +1131,45 @@
   /* The boot gate reuses the .ide window wholesale (see the IDE block below) so the reload
      prompt and the first-visit intro are visibly the same object. Only the width differs:
      this one is a single line, so a narrower window reads as "quick", not as a wall. */
-  .ide--boot{width:min(92vw,400px)}
-  .ide--boot .ide__code{padding-bottom:2px;min-height:104px}   /* reserve the output rows so the window never resizes mid-run (CLS + it would feel unstable) */
+  /* An EDITOR, then a TERMINAL. Ryan: it has to feel like coding, in a real language, and the
+     visitor should feel like the one writing it. So the window shows a small but genuine C++
+     translation unit with a gutter and an active line, the cursor sits on the ONE line that is
+     still missing, that line types itself in, and the button below compiles and runs it. The
+     payoff is a build log, not a dismissed dialog. */
+  .ide--boot{width:min(93vw,452px)}
+  .ide--boot .ide__code{padding:14px 0 8px;font-size:12px;line-height:1.75}
   .ide--boot:focus{outline:none}
-  .bootcmd .p{color:var(--signal)}                              /* the REPL prompt: the one accent */
-  .bootcmd{color:var(--fg)}
-  /* Syntax colours stay inside ONE muted family so the red accent is never diluted. */
-  .bootcmd .kw{color:rgba(236,231,219,.45)}                     /* await / const */
-  .bootcmd .fn{color:var(--fg)}
-  .bootcmd .key{color:rgba(236,231,219,.62)}
-  .bootcmd .bool{color:var(--signal)}
-  .bootcmd .op,.bootcmd .brace{color:rgba(236,231,219,.35)}
+  /* gutter + active line, the two things that make a code block read as an editor.
+     The row is a flex container, which STRIPS the whitespace between its children, so the code
+     itself lives in one `.c` child and keeps its own spacing (`int main`, not `intmain`). */
+  .ide--boot .ide__ln,.bootsh .ide__ln{display:flex;padding:0 16px 0 0}
+  .ide--boot .ide__ln .g{flex:none;width:32px;text-align:right;padding-right:12px;font-weight:400;
+    color:rgba(236,231,219,.22);-webkit-user-select:none;user-select:none}
+  .ide--boot .ide__ln .c,.bootsh .ide__ln .c{flex:1;min-width:0;white-space:pre-wrap;word-break:break-word}
+  .ide--boot .ide__ln.is-live{background:linear-gradient(90deg, rgba(255,42,18,.09), transparent 72%);
+    box-shadow:inset 2px 0 0 var(--signal)}
+  .ide--boot .ide__ln.is-live .g{color:rgba(255,42,18,.75)}
+  /* Syntax colours stay inside ONE muted family so the red accent is never diluted. The only
+     thing that gets the accent is the call the visitor is about to make. */
+  .cpp .pp{color:rgba(236,231,219,.4)}                          /* #include */
+  .cpp .str{color:rgba(236,231,219,.5)}
+  .cpp .kw{color:rgba(236,231,219,.46)}                         /* int, auto, return */
+  .cpp .ns{color:rgba(236,231,219,.58)}                         /* ryan:: */
+  .cpp .fn{color:rgba(236,231,219,.86)}
+  .cpp .op{color:rgba(236,231,219,.32)}
+  .cpp .v{color:var(--fg)}
+  .cpp .f{color:var(--signal)}                                  /* the call being written */
+  /* the shell half: separated by a rule so it reads as a different surface, like a terminal
+     pane under an editor pane */
+  .bootsh{padding:11px 16px 13px;border-top:1px solid rgba(255,255,255,.07);
+    background:rgba(0,0,0,.22);font-family:var(--mono);font-size:11.5px;line-height:1.8;
+    min-height:84px}                                            /* reserved so the window never resizes mid-run */
+  .bootcmd{color:rgba(236,231,219,.8);white-space:pre-wrap;word-break:break-all}
+  .bootcmd .p{color:var(--signal);margin-right:6px}             /* the shell prompt: the one accent */
   .bootout{color:rgba(236,231,219,.55)}
-  .bootout .ok{color:var(--signal);margin-right:5px}
+  .bootout .ok{color:var(--signal);margin-right:6px}
   .bootret{color:rgba(236,231,219,.85)}
-  .bootret .ret{color:rgba(236,231,219,.3);margin-right:5px}
-  .bootret .brace,.bootret .op{color:rgba(236,231,219,.35)}
-  .bootret .bool{color:var(--signal)}
+  .bootret .ret{color:rgba(236,231,219,.3);margin-right:6px}
   .ide__run kbd{display:inline-block;margin-right:7px;padding:1px 6px;border-radius:4px;
     border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.06);
     font-family:var(--mono);font-size:11px;line-height:1.5;color:var(--fg)}
@@ -1092,16 +1180,48 @@
      is a pair of 38px pills until the visitor asks for more. */
   .dock{position:fixed;right:18px;bottom:calc(18px + env(safe-area-inset-bottom,0px));z-index:1450;
     display:flex;gap:8px}
-  .dock__btn{position:relative;width:38px;height:38px;display:grid;place-items:center;border-radius:10px;
-    border:1px solid rgba(255,255,255,.1);
-    background:linear-gradient(180deg, rgba(22,23,28,.9), rgba(13,14,17,.9));
-    -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);
-    box-shadow:0 8px 26px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.06);
-    color:rgba(236,231,219,.62);cursor:pointer;transition:color .2s ease,border-color .2s ease,background .2s ease}
+  /* the dock tiles are the same glass, at tile scale: they are where the panels come from, so
+     the material has to match or the panel would look like it arrived from somewhere else */
+  .dock__btn{position:relative;width:42px;height:42px;display:grid;place-items:center;border-radius:15px;
+    border:1px solid rgba(255,255,255,.13);
+    background:linear-gradient(158deg, rgba(42,44,53,.6), rgba(13,14,18,.76));
+    -webkit-backdrop-filter:blur(22px) saturate(180%);backdrop-filter:blur(22px) saturate(180%);
+    box-shadow:0 10px 28px -6px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.24),
+      inset 0 -1px 0 rgba(255,255,255,.05);
+    color:rgba(236,231,219,.68);cursor:pointer;transition:color .2s ease,border-color .2s ease}
   .dock__btn:hover{color:var(--fg);border-color:rgba(255,42,18,.4)}
   .dock__btn[aria-expanded="true"]{color:var(--fg);border-color:rgba(255,42,18,.55)}
   .dock__btn:focus-visible{outline:2px solid var(--signal);outline-offset:2px}
-  .dock__ico{width:17px;height:17px}
+  .dock__ico{width:17px;height:17px;
+    transition:opacity .2s ease, transform .42s cubic-bezier(.34,1.56,.64,1)}
+  /* OPEN state: the tile becomes the close control for the window it opened, so the affordance
+     is where the visitor's hand already is. Apple does this as a MORPH, not a swap: the icon
+     rotates out as the cross rotates in, on a spring, sharing one centre. Two strokes drawn in
+     CSS rather than a second SVG so both halves animate on the same clock. */
+  .dock__x{position:absolute;inset:0;display:grid;place-items:center;opacity:0;
+    transform:rotate(-90deg) scale(.5);
+    transition:opacity .2s ease, transform .42s cubic-bezier(.34,1.56,.64,1)}
+  .dock__x::before,.dock__x::after{content:"";position:absolute;width:14px;height:1.7px;
+    border-radius:2px;background:currentColor}
+  .dock__x::before{transform:rotate(45deg)}
+  .dock__x::after{transform:rotate(-45deg)}
+  .dock__btn[aria-expanded="true"]{color:var(--fg)}
+  .dock__btn[aria-expanded="true"] .dock__ico,
+  .dock__btn[aria-expanded="true"] .dock__eq{opacity:0;transform:rotate(90deg) scale(.5)}
+  .dock__btn[aria-expanded="true"] .dock__x{opacity:1;transform:none}
+  /* MINIMISED. macOS keeps a minimised window in the Dock with its identity intact, so the
+     dock button widens into a labelled tile carrying the window's name (and, for audio, the
+     station actually playing). The visitor can see what is parked without reopening it.
+     Width is animated by GSAP, not by this transition, so the two never fight. */
+  .dock__btn.is-min{width:auto;min-width:38px;padding:0 12px;grid-auto-flow:column;gap:9px;
+    justify-content:start;border-color:rgba(255,42,18,.38)}
+  .dock__lbl{display:none;font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;
+    color:rgba(236,231,219,.8);white-space:nowrap;max-width:170px;overflow:hidden;text-overflow:ellipsis}
+  .dock__btn.is-min .dock__lbl{display:block}
+  /* the icon sits inline with the label instead of centred in a square */
+  .dock__btn.is-min .dock__ico,.dock__btn.is-min .dock__eq{position:static;width:15px;height:15px}
+  .dock__btn.is-min .dock__eq{display:none;padding:0;height:14px}
+  .dock__btn.is-min.is-live .dock__eq{display:flex}
   /* Equaliser: the only thing that moves in the dock, and only while audio is actually on. */
   .dock__eq{position:absolute;inset:0;display:none;align-items:flex-end;justify-content:center;gap:2px;padding-bottom:9px}
   .dock__btn.is-live .dock__ico{display:none}
@@ -1112,11 +1232,70 @@
   @keyframes eqbar{0%,100%{transform:scaleY(.4)}50%{transform:scaleY(1)}}
   .panel{position:fixed;right:18px;bottom:calc(66px + env(safe-area-inset-bottom,0px));z-index:1460;
     width:min(92vw,330px)}
-  .panel .ide{width:100%}
+  /* ---- LIQUID GLASS (the two dock panels only) ----
+     Apple's material, read honestly rather than copied: a translucent layer that BLURS AND
+     SATURATES what is behind it, a bright specular rim where light catches the top edge, a
+     dimmer bounce along the bottom, and one soft lens highlight off the top-left corner. Dark
+     glass, because the site is dark and a frosted-white panel would be a foreign object.
+     Radii go large and CONCENTRIC (outer 22, inner controls 14) which is what makes Apple's
+     shapes feel moulded rather than boxed.
+     PERF: this is 2 elements, never more than one of them visible, so live backdrop-filter is
+     affordable here. It is NOT affordable on the carousel (12 near-opaque 3D layers froze the
+     compositor) - do not lift this block onto .proj. */
+  .panel .ide{width:100%;position:relative;border-radius:22px;
+    border:1px solid rgba(255,255,255,.13);
+    background:linear-gradient(158deg, rgba(42,44,53,.60), rgba(13,14,18,.74));
+    -webkit-backdrop-filter:blur(30px) saturate(190%);backdrop-filter:blur(30px) saturate(190%);
+    box-shadow:0 32px 74px -22px rgba(0,0,0,.78),
+      inset 0 1px 0 rgba(255,255,255,.30),
+      inset 0 -1px 0 rgba(255,255,255,.07),
+      inset 0 0 44px rgba(255,255,255,.035)}
+  /* the lens: light entering the top-left corner of a thick piece of glass */
+  .panel .ide::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+    background:radial-gradient(125% 72% at 10% -12%, rgba(255,255,255,.17), transparent 56%);
+    mix-blend-mode:screen;z-index:3}
+  .panel .ide__bar{background:linear-gradient(180deg, rgba(255,255,255,.09), rgba(255,255,255,.01));
+    border-bottom-color:rgba(255,255,255,.09);padding:12px 15px}
+  .panel .ide__file{font-size:11.5px;color:rgba(236,231,219,.6)}
   .panel--chat{width:min(92vw,370px)}
-  .panel__x{margin-left:auto;border:0;background:none;color:rgba(236,231,219,.4);font-size:17px;line-height:1;
-    cursor:pointer;padding:0 2px;transition:color .2s ease}
-  .panel__x:hover{color:var(--fg)}
+  /* ZOOM (green). A chat you are actually reading wants height more than width, so zoom buys
+     log height first; the music panel spends it on the station list. Same window, more room,
+     which is what the macOS green button means. It is not a fullscreen takeover. */
+  .panel--chat.is-max{width:min(94vw,460px)}
+  .panel--chat.is-max .chat__log{height:min(58vh,470px)}
+  .panel--music.is-max{width:min(94vw,390px)}
+  .panel--music.is-max .mus__list{max-height:min(34vh,260px)}
+  /* WINDOW CONTROLS. Real macOS behaviour, not decoration: red closes, yellow minimises into
+     the dock tile, green zooms. All three stay lit because here all three actually do
+     something (contrast with the project modal, where the inactive lamp is dimmed rather than
+     removed - Ryan's rule is unhighlight, never delete). Glyphs reveal on group hover. */
+  /* 14px, not the 12px macOS uses. These sit in a small floating panel rather than a full
+     window title bar, and at 12 they were fiddly to hit; the hit target below is 34px square,
+     which clears the 24px minimum with room to spare while the dot still reads as a lamp. */
+  .lamps--win{display:flex;gap:9px;flex:none}
+  .lamps--win button{width:14px;height:14px;border-radius:50%;border:0;padding:0;position:relative;
+    cursor:pointer;box-shadow:0 0 0 .5px rgba(0,0,0,.34) inset;
+    transition:transform .2s cubic-bezier(.34,1.56,.64,1)}
+  .lamps--win button:nth-child(1){background:radial-gradient(circle at 35% 30%, #ff8b84, #ff5f57)}
+  .lamps--win button:nth-child(2){background:radial-gradient(circle at 35% 30%, #ffd479, #febc2e)}
+  .lamps--win button:nth-child(3){background:radial-gradient(circle at 35% 30%, #6fe08a, #28c840)}
+  .lamps--win button::before{content:"";position:absolute;inset:-10px;border-radius:50%}  /* 34px hit target */
+  .lamps--win button:hover{transform:scale(1.26)}
+  .lamps--win button:active{transform:scale(1.04)}
+  .lamps--win button:focus-visible{outline:2px solid var(--signal);outline-offset:3px}
+  .lamps--win button::after{position:absolute;inset:0;display:grid;place-items:center;
+    font-family:var(--mono);font-weight:800;font-size:10px;line-height:1;color:rgba(0,0,0,.62);
+    opacity:0;transition:opacity .14s}
+  .lamps--win button:nth-child(1)::after{content:"\00d7";font-size:13px}
+  .lamps--win button:nth-child(2)::after{content:"\2013";font-size:11px}
+  .lamps--win button:nth-child(3)::after{content:"\2921";font-size:11px}
+  .panel.is-max .lamps--win button:nth-child(3)::after{content:"\2922"}
+  .lamps--win:hover button::after{opacity:1}
+  /* a lamp with no job is DIMMED, never removed (Ryan's rule): the window still reads as a
+     window, and the visitor can see which control is the live one. */
+  .lamps--win button.is-off{filter:grayscale(.92) brightness(.72);opacity:.5;cursor:default}
+  .lamps--win button.is-off:hover{transform:none}
+  .lamps--win button.is-off::after{content:none}
   .panel__body{padding:14px 15px 12px}
   .panel__lbl{margin:14px 0 7px;font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;
     color:rgba(236,231,219,.35)}
@@ -1129,28 +1308,50 @@
   .mus__dot{width:6px;height:6px;border-radius:50%;background:rgba(236,231,219,.25);flex-shrink:0}
   .mus.is-on .mus__dot,.panel--music.is-on .mus__dot{background:var(--signal);box-shadow:0 0 8px rgba(255,42,18,.7)}
   .mus__row{display:flex;gap:10px;align-items:center}
-  .mus__play{flex:0 0 68px;padding:8px;border-radius:7px;border:1px solid rgba(255,42,18,.45);
-    background:rgba(255,42,18,.11);color:var(--fg);font-family:var(--mono);font-size:11px;letter-spacing:.12em;
+  .mus__play{flex:0 0 74px;padding:10px;border-radius:14px;border:1px solid rgba(255,42,18,.45);
+    background:linear-gradient(160deg, rgba(255,42,18,.22), rgba(255,42,18,.09));color:var(--fg);
+    font-family:var(--mono);font-size:11px;letter-spacing:.12em;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.18);
     text-transform:uppercase;cursor:pointer;transition:background .2s ease}
   .mus__play:hover{background:rgba(255,42,18,.2)}
+  /* The native range control was the one un-designed thing left in the panel: an OS widget
+     sitting inside a glass window. Rebuilt to match, with the played portion in the accent so
+     the level is readable at a glance rather than only from the knob position. */
   .mus__vol{flex:1;display:flex}
-  .mus__vol input{width:100%;accent-color:var(--signal);cursor:pointer}
-  .mus__list{display:flex;flex-direction:column;gap:4px;max-height:132px;overflow-y:auto;
+  .mus__vol input{-webkit-appearance:none;appearance:none;width:100%;height:22px;
+    background:transparent;cursor:pointer}
+  .mus__vol input::-webkit-slider-runnable-track{height:6px;border-radius:999px;
+    background:linear-gradient(90deg, var(--signal) var(--p,35%), rgba(255,255,255,.13) var(--p,35%));
+    box-shadow:inset 0 1px 2px rgba(0,0,0,.45)}
+  .mus__vol input::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;margin-top:-5px;
+    border-radius:50%;background:linear-gradient(160deg,#fff,#d8d8d4);
+    box-shadow:0 2px 7px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.9)}
+  .mus__vol input::-moz-range-track{height:6px;border-radius:999px;background:rgba(255,255,255,.13)}
+  .mus__vol input::-moz-range-progress{height:6px;border-radius:999px;background:var(--signal)}
+  .mus__vol input::-moz-range-thumb{width:16px;height:16px;border:0;border-radius:50%;
+    background:linear-gradient(160deg,#fff,#d8d8d4);box-shadow:0 2px 7px rgba(0,0,0,.55)}
+  .mus__vol input:focus-visible{outline:2px solid var(--signal);outline-offset:4px;border-radius:999px}
+  /* sized to whole rows (4 x 36 + gaps) so the list never cuts a station in half */
+  .mus__list{display:flex;flex-direction:column;gap:4px;max-height:156px;overflow-y:auto;
     scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.16) transparent}
   .mus__list::-webkit-scrollbar{width:8px}
   .mus__list::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:9px}
+  /* station rows are TAP targets, so they get a 34px min height rather than the 27px that
+     7px padding on an 11px line produced */
   .mus__item{display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;
-    padding:7px 9px;border-radius:6px;border:1px solid transparent;background:rgba(255,255,255,.028);
-    color:rgba(236,231,219,.72);font-family:var(--mono);font-size:11px;text-align:left;cursor:pointer;
+    min-height:36px;padding:9px 12px;border-radius:13px;border:1px solid rgba(255,255,255,.06);
+    background:linear-gradient(160deg, rgba(255,255,255,.055), rgba(255,255,255,.02));
+    color:rgba(236,231,219,.72);font-family:var(--mono);font-size:11.5px;text-align:left;cursor:pointer;
     transition:background .16s ease,border-color .16s ease,color .16s ease}
   .mus__item:hover{background:rgba(255,42,18,.09);border-color:rgba(255,42,18,.32);color:var(--fg)}
   .mus__item.is-sel{border-color:rgba(255,42,18,.5);color:var(--fg);background:rgba(255,42,18,.12)}
   .mus__item span{color:rgba(236,231,219,.3);font-size:9.5px;white-space:nowrap}
   .mus__find{display:flex;gap:6px;margin-bottom:8px}
-  .mus__find input{flex:1;min-width:0;padding:7px 9px;border-radius:6px;border:1px solid rgba(255,255,255,.12);
-    background:rgba(0,0,0,.28);color:var(--fg);font-family:var(--mono);font-size:11px}
+  .mus__find input{flex:1;min-width:0;padding:9px 12px;border-radius:13px;border:1px solid rgba(255,255,255,.13);
+    background:rgba(0,0,0,.3);color:var(--fg);font-family:var(--mono);font-size:11px;
+    box-shadow:inset 0 1px 2px rgba(0,0,0,.35)}
   .mus__find input:focus{outline:none;border-color:rgba(255,42,18,.45)}
-  .mus__find button{padding:7px 11px;border-radius:6px;border:1px solid rgba(255,255,255,.14);
+  .mus__find button{padding:9px 13px;border-radius:13px;border:1px solid rgba(255,255,255,.14);
     background:rgba(255,255,255,.04);color:rgba(236,231,219,.7);font-family:var(--mono);font-size:10.5px;
     text-transform:uppercase;letter-spacing:.08em;cursor:pointer;transition:color .2s ease,border-color .2s ease}
   .mus__find button:hover{color:var(--fg);border-color:rgba(255,42,18,.4)}
@@ -1160,12 +1361,31 @@
     scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.16) transparent}
   .chat__log::-webkit-scrollbar{width:8px}
   .chat__log::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:9px}
-  .chat__msg{max-width:88%;padding:8px 11px;border-radius:9px;font-size:12.5px;line-height:1.6;
+  /* 13px/1.65: these bubbles carry the substantive answers about Ryan's work, so they are read,
+     not glanced at. 12.5 at 1.6 was tight for a four sentence reply in a 370px window.
+     Shape follows the glass: large radius with ONE tightened corner pointing at whoever spoke,
+     which is the bubble tail without drawing a tail. */
+  .chat__msg{max-width:88%;padding:10px 13px;border-radius:17px;font-size:13px;line-height:1.65;
     white-space:pre-wrap;word-wrap:break-word}
-  .chat__msg--bot{align-self:flex-start;background:rgba(255,255,255,.045);color:rgba(236,231,219,.88);
-    border:1px solid rgba(255,255,255,.07)}
-  .chat__msg--me{align-self:flex-end;background:rgba(255,42,18,.13);border:1px solid rgba(255,42,18,.32);
+  .chat__msg--bot{align-self:flex-start;border-radius:17px 17px 17px 6px;
+    background:linear-gradient(160deg, rgba(255,255,255,.085), rgba(255,255,255,.035));
+    color:rgba(236,231,219,.9);border:1px solid rgba(255,255,255,.1);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.16)}
+  .chat__msg--me{align-self:flex-end;border-radius:17px 17px 6px 17px;
+    background:linear-gradient(160deg, rgba(255,42,18,.2), rgba(255,42,18,.1));
+    border:1px solid rgba(255,42,18,.34);box-shadow:inset 0 1px 0 rgba(255,255,255,.13);
     color:var(--fg);font-family:var(--mono);font-size:11.5px}
+  /* AVATAR. Not a face and not a mascot: the assistant is this site talking, so it wears the
+     site's own mark. Same glass as everything else, at the smallest scale it survives. */
+  .chat__row{display:flex;align-items:flex-end;gap:8px;align-self:flex-start;max-width:94%}
+  .chat__row .chat__msg{max-width:none}
+  .chat__ava{flex:none;width:27px;height:27px;border-radius:50%;display:grid;place-items:center;
+    color:rgba(236,231,219,.72);
+    background:linear-gradient(158deg, rgba(56,58,68,.7), rgba(16,17,22,.8));
+    border:1px solid rgba(255,255,255,.14);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.26), 0 3px 10px -3px rgba(0,0,0,.6)}
+  .chat__ava svg{width:14px;height:11px;overflow:visible}
+  .chat__ava .cur{fill:var(--signal)}
   .chat__msg--err{align-self:flex-start;color:rgba(236,231,219,.5);font-family:var(--mono);font-size:11px;
     background:none;border:0;padding-left:0}
   /* The handoff address. It is the whole point of a handoff reply, so it reads as the one
@@ -1183,12 +1403,17 @@
     cursor:pointer;transition:color .18s ease,border-color .18s ease}
   .chat__chips button:hover{color:var(--fg);border-color:rgba(255,42,18,.4)}
   .chat__chips.is-gone{display:none}
-  .chat__form{display:flex;gap:7px;padding:11px 15px 13px;border-top:1px solid rgba(255,255,255,.07)}
-  .chat__form input{flex:1;min-width:0;padding:9px 11px;border-radius:7px;border:1px solid rgba(255,255,255,.12);
-    background:rgba(0,0,0,.28);color:var(--fg);font-family:var(--mono);font-size:11.5px}
+  /* inner controls sit at a radius CONCENTRIC with the 22px shell, which is the detail that
+     makes the whole thing feel moulded from one piece instead of assembled from parts */
+  .chat__form{display:flex;gap:8px;padding:11px 14px 14px;border-top:1px solid rgba(255,255,255,.08)}
+  .chat__form input{flex:1;min-width:0;padding:10px 13px;border-radius:14px;border:1px solid rgba(255,255,255,.13);
+    background:rgba(0,0,0,.3);color:var(--fg);font-family:var(--mono);font-size:11.5px;
+    box-shadow:inset 0 1px 2px rgba(0,0,0,.35)}
   .chat__form input:focus{outline:none;border-color:rgba(255,42,18,.45)}
-  .chat__form button{width:36px;flex-shrink:0;border-radius:7px;border:1px solid rgba(255,42,18,.45);
-    background:rgba(255,42,18,.12);color:var(--fg);font-size:14px;cursor:pointer;transition:background .2s ease}
+  .chat__form button{width:40px;height:38px;flex-shrink:0;border-radius:14px;border:1px solid rgba(255,42,18,.45);
+    background:linear-gradient(160deg, rgba(255,42,18,.24), rgba(255,42,18,.1));color:var(--fg);
+    font-size:14px;cursor:pointer;transition:background .2s ease;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.18)}
   .chat__form button:hover{background:rgba(255,42,18,.22)}
   .chat__form button[disabled]{opacity:.45;cursor:not-allowed}
   @media (max-width:520px){
@@ -1198,41 +1423,56 @@
   }
   @media (prefers-reduced-motion:reduce){ .dock__eq i,.chat__dots i{animation:none} }
 
-  /* ---- EXIT REACTION ---- */
-  /* sits ABOVE the dock (which owns the bottom-right corner) so the two never overlap */
+  /* ---- EXIT REACTION ----
+     Same IDE window as the dock panels and the boot gate, because it is the same product
+     asking. The old build was a floating rounded card with its own chrome and its own close
+     glyph, which read as a third-party feedback widget bolted onto the page. This one is a
+     window in the same family, sitting ABOVE the dock so the two never overlap. */
   .react{position:fixed;right:18px;bottom:calc(66px + env(safe-area-inset-bottom,0px));z-index:1500;
-    width:min(90vw,320px);padding:16px 16px 14px;border-radius:13px;
-    border:1px solid rgba(255,255,255,.1);
-    background:linear-gradient(180deg, rgba(22,23,28,.92), rgba(13,14,17,.92));
-    -webkit-backdrop-filter:blur(14px) saturate(150%);backdrop-filter:blur(14px) saturate(150%);
-    box-shadow:0 20px 60px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.06);
-    opacity:0;transform:translateY(14px) scale(.98);pointer-events:none;
-    transition:opacity .45s ease,transform .45s cubic-bezier(.2,.8,.2,1)}
-  .react.is-show{opacity:1;transform:none;pointer-events:auto}
-  .react__x{position:absolute;top:8px;right:10px;border:0;background:none;color:rgba(236,231,219,.4);
-    font-size:18px;line-height:1;cursor:pointer;padding:2px 4px;transition:color .2s ease}
-  .react__x:hover{color:rgba(236,231,219,.8)}
-  .react__q{margin:0 0 12px;font-family:var(--disp);font-size:16px;font-weight:600;color:var(--fg);letter-spacing:.01em}
-  .react__row{display:flex;gap:7px;flex-wrap:wrap}
-  .react__chip{flex:1 1 auto;padding:9px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.12);
-    background:rgba(255,255,255,.03);color:rgba(236,231,219,.85);
-    font-family:var(--mono);font-size:11.5px;letter-spacing:.04em;cursor:pointer;white-space:nowrap;
-    transition:background .18s ease,border-color .18s ease,transform .12s ease}
+    width:min(92vw,336px);pointer-events:none}
+  .react.is-show{pointer-events:auto}
+  /* This is the ONE window that wants something from the visitor, and over the contact
+     section's dark red wash the neutral chrome disappeared into the page (Ryan: too blended
+     in). So it gets a lit edge: a signal-red hairline, a soft red bloom, and a bright rule
+     across the top of the title bar. Same window family, raised voice. It is still the panel
+     that leaves on its own, so the emphasis is never a thing the visitor has to fight. */
+  .react .ide{width:100%;position:relative;border-color:rgba(255,42,18,.34);
+    box-shadow:0 26px 70px rgba(0,0,0,.66), 0 0 0 1px rgba(255,42,18,.14),
+      0 0 52px -14px rgba(255,42,18,.62), inset 0 1px 0 rgba(255,255,255,.07)}
+  .react .ide::before{content:"";position:absolute;top:0;left:0;right:0;height:2px;z-index:2;
+    background:linear-gradient(90deg, var(--signal), rgba(255,42,18,.25) 62%, transparent)}
+  .react .ide__bar{background:linear-gradient(180deg, rgba(255,42,18,.12), rgba(255,42,18,.03))}
+  .react__body{padding:15px 16px 15px}
+  .react__q{margin:0;font-family:var(--disp);font-size:17px;font-weight:600;color:var(--fg);letter-spacing:.01em}
+  .react__sub{margin:5px 0 13px;font-family:var(--mono);font-size:10.5px;letter-spacing:.05em;
+    color:rgba(236,231,219,.42)}
+  .react__row{display:flex;gap:6px}
+  .react__chip{flex:1 1 0;min-width:0;padding:10px 6px;border-radius:8px;border:1px solid rgba(255,255,255,.12);
+    background:rgba(255,255,255,.03);color:rgba(236,231,219,.8);
+    font-family:var(--mono);font-size:11px;letter-spacing:.03em;cursor:pointer;white-space:nowrap;
+    overflow:hidden;text-overflow:ellipsis;position:relative;
+    transition:background .18s ease,border-color .18s ease,color .18s ease}
   .react__chip:hover{background:rgba(255,42,18,.1);border-color:rgba(255,42,18,.4);color:var(--fg)}
-  .react__chip:active{transform:translateY(1px)}
-  .react__chip.is-picked{background:rgba(255,42,18,.18);border-color:rgba(255,42,18,.6);color:var(--fg)}
-  .react__note{display:flex;gap:6px;margin-top:11px;opacity:0;max-height:0;overflow:hidden;
-    transition:opacity .3s ease,max-height .3s ease}
-  .react__note.is-open{opacity:1;max-height:60px}
-  .react__note input{flex:1;min-width:0;padding:8px 10px;border-radius:7px;border:1px solid rgba(255,255,255,.12);
-    background:rgba(0,0,0,.25);color:var(--fg);font-family:var(--mono);font-size:12px}
+  .react__chip:focus-visible{outline:2px solid var(--signal);outline-offset:2px}
+  /* the pick COMMITS: the chosen chip takes the accent and the row collapses around it, so the
+     answer stays visible while the optional note is offered. Nothing is undone by a mis-tap
+     because the note step is where it lands, not a second confirmation of the same thing. */
+  .react__chip.is-picked{background:rgba(255,42,18,.2);border-color:rgba(255,42,18,.62);color:var(--fg)}
+  .react__row.is-done .react__chip:not(.is-picked){opacity:0;pointer-events:none}
+  .react__note{display:flex;gap:6px;margin-top:10px;overflow:hidden;height:0;opacity:0}
+  .react__note input{flex:1;min-width:0;padding:9px 10px;border-radius:7px;border:1px solid rgba(255,255,255,.12);
+    background:rgba(0,0,0,.28);color:var(--fg);font-family:var(--mono);font-size:11.5px}
+  .react__note input::placeholder{color:rgba(236,231,219,.3)}
   .react__note input:focus{outline:none;border-color:rgba(255,42,18,.5)}
-  .react__send{padding:8px 12px;border-radius:7px;border:1px solid rgba(255,42,18,.5);
-    background:rgba(255,42,18,.12);color:var(--fg);font-family:var(--mono);font-size:11px;
-    letter-spacing:.08em;text-transform:uppercase;cursor:pointer;transition:background .18s ease}
+  .react__send{padding:9px 13px;border-radius:7px;border:1px solid rgba(255,42,18,.5);
+    background:rgba(255,42,18,.12);color:var(--fg);font-family:var(--mono);font-size:10.5px;
+    letter-spacing:.1em;text-transform:uppercase;cursor:pointer;transition:background .18s ease}
   .react__send:hover{background:rgba(255,42,18,.22)}
-  .react__thanks{margin:6px 0 0;font-family:var(--mono);font-size:12px;color:rgba(236,231,219,.7);letter-spacing:.03em}
-  @media (prefers-reduced-motion:reduce){ .react,.react__note{transition:none} }
+  /* the receipt. A terminal line, typed, because that is what this site does when something
+     actually happened. */
+  .react__thanks{margin:11px 0 0;font-family:var(--mono);font-size:11px;letter-spacing:.04em;
+    color:rgba(236,231,219,.62);white-space:pre}
+  .react__thanks .ok{color:var(--signal);margin-right:6px}
 
   @media (max-width:900px){
     .bar nav{display:none}
@@ -1265,7 +1505,9 @@
 </head>
 <body class="hook-active">
 <a class="skip-link" href="#portfolio">Skip to portfolio</a>
-<div class="cursor" id="cursor"></div>
+<!-- ONE cursor for the whole site: intro, hook and page. Two parts, because a single dot
+     cannot express state: the dot is exact and instant, the ring lags and carries the state. -->
+<div class="cursor" id="cursor" aria-hidden="true"><b class="cursor__ring" id="curRing"><i class="cursor__lit"></i></b><b class="cursor__dot" id="curDot"></b></div>
 
 <!-- Intro: a one-time welcome video. Plays ONCE PER DEVICE (localStorage, which
      survives the browser closing), BEFORE and separate from the per-SESSION hook.
@@ -2319,20 +2561,29 @@
     <div class="ide ide--boot" tabindex="-1">
       <div class="ide__bar">
         <span class="lamps" aria-hidden="true"><i></i><i></i><i></i></span>
-        <span class="ide__file">ryan.sys</span>
+        <span class="ide__file">session.cpp</span>
       </div>
-      <div class="ide__code">
-        <!-- A REPL, not a dialog. Real JS gets TYPED in on entrance (so it reads as written,
-             not printed), then Run evaluates it and the return value comes back. The whole
-             point is that the visitor executes a line of code, not that they dismiss a modal. -->
-        <p class="ide__ln bootcmd"><span class="p">&gt;</span> <span id="bootType"></span><span class="ide__cur" id="bootCur"></span></p>
-        <p class="ide__ln bootout"><span class="ok">&#10003;</span> audio unlocked</p>
-        <p class="ide__ln bootout"><span class="ok">&#10003;</span> session restored</p>
-        <p class="ide__ln bootout bootret"><span class="ret">&#8592;</span> <span class="brace">{</span> ready<span class="op">:</span> <span class="bool">true</span> <span class="brace">}</span></p>
+      <!-- An EDITOR, not a dialog. The file is real C++ and it is one line short of compiling;
+           that line types itself onto the active row, and the button below builds and runs it.
+           The visitor executes a program, they do not dismiss a modal. -->
+      <div class="ide__code cpp">
+        <p class="ide__ln"><b class="g">1</b><span class="c"><span class="pp">#include</span> <span class="str">"ryan/session.hpp"</span></span></p>
+        <p class="ide__ln"><b class="g">2</b><span class="c"> </span></p>
+        <p class="ide__ln"><b class="g">3</b><span class="c"><span class="kw">int</span> <span class="fn">main</span><span class="op">() {</span></span></p>
+        <p class="ide__ln"><b class="g">4</b><span class="c">  <span class="kw">auto</span> <span class="v">s</span> <span class="op">=</span> <span class="ns">ryan</span><span class="op">::</span><span class="fn">session</span><span class="op">::</span><span class="fn">restore</span><span class="op">();</span></span></p>
+        <p class="ide__ln is-live"><b class="g">5</b><span class="c">  <span id="bootType"></span><span class="ide__cur" id="bootCur"></span></span></p>
+        <p class="ide__ln"><b class="g">6</b><span class="c">  <span class="kw">return</span> <span class="v">s</span><span class="op">.</span><span class="fn">run</span><span class="op">();</span></span></p>
+        <p class="ide__ln"><b class="g">7</b><span class="c"><span class="op">}</span></span></p>
+      </div>
+      <div class="bootsh">
+        <p class="ide__ln bootcmd"><span class="p">$</span><span class="c" id="bootShT"></span></p>
+        <p class="ide__ln bootout"><span class="ok">&#10003;</span><span class="c">audio device acquired</span></p>
+        <p class="ide__ln bootout"><span class="ok">&#10003;</span><span class="c">session restored</span></p>
+        <p class="ide__ln bootret"><span class="ret">&#8594;</span><span class="c">exit 0</span></p>
       </div>
       <div class="ide__foot">
-        <button type="button" class="ide__run" id="bootGo"><kbd aria-hidden="true">&#9166;</kbd> Run</button>
-        <span class="ide__meta">or click anywhere</span>
+        <button type="button" class="ide__run" id="bootGo"><kbd aria-hidden="true">&#9166;</kbd> build &amp; run</button>
+        <span class="ide__meta">or press any key</span>
       </div>
     </div>
     <button type="button" class="introv__pass" id="bootMute">continue muted</button>
@@ -2343,18 +2594,30 @@
        (POSTed to an ntfy.sh topic - no signup, low security, by design). Marketing: real signal
        AFTER they've experienced it, not a premature "rate me" up front. -->
   <div class="react" id="exitReact" role="dialog" aria-label="React to the portfolio" hidden>
-    <button type="button" class="react__x" id="reactX" aria-label="Dismiss">&times;</button>
-    <p class="react__q">Worth your scroll?</p>
-    <div class="react__row" id="reactRow">
-      <button type="button" class="react__chip" data-react="hire">hire-worthy</button>
-      <button type="button" class="react__chip" data-react="solid">solid</button>
-      <button type="button" class="react__chip" data-react="meh">not for me</button>
+    <div class="ide">
+      <div class="ide__bar">
+        <span class="lamps lamps--win">
+          <button type="button" id="reactX" aria-label="Dismiss"></button>
+          <button type="button" class="is-off" tabindex="-1" aria-hidden="true"></button>
+          <button type="button" class="is-off" tabindex="-1" aria-hidden="true"></button>
+        </span>
+        <span class="ide__file">signal.log</span>
+      </div>
+      <div class="react__body">
+        <p class="react__q">Worth your scroll?</p>
+        <p class="react__sub">one tap, straight to Ryan</p>
+        <div class="react__row" id="reactRow">
+          <button type="button" class="react__chip" data-react="hire">hire-worthy</button>
+          <button type="button" class="react__chip" data-react="solid">solid</button>
+          <button type="button" class="react__chip" data-react="meh">not for me</button>
+        </div>
+        <div class="react__note" id="reactNote">
+          <input type="text" id="reactMsg" maxlength="140" placeholder="add a line (optional)" aria-label="Optional note" />
+          <button type="button" class="react__send" id="reactSend">send</button>
+        </div>
+        <p class="react__thanks" id="reactThanks" hidden><span class="ok">&#10003;</span><span id="reactThanksT"></span></p>
+      </div>
     </div>
-    <div class="react__note" id="reactNote">
-      <input type="text" id="reactMsg" maxlength="140" placeholder="drop a note (optional)" aria-label="Optional note" />
-      <button type="button" class="react__send" id="reactSend">send</button>
-    </div>
-    <p class="react__thanks" id="reactThanks" hidden>logged. thanks for the signal.</p>
   </div>
 
   <!-- DOCK: two persistent affordances, bottom-right. Both panels reuse the .ide window
@@ -2363,9 +2626,13 @@
     <button type="button" class="dock__btn" id="dockMusic" aria-label="Ambient audio" aria-expanded="false" title="Ambient audio">
       <svg viewBox="0 0 16 16" aria-hidden="true" class="dock__ico"><path d="M6 12.5V4l7-1.5v8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="4.2" cy="12.5" r="1.9" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="11.2" cy="10.5" r="1.9" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
       <span class="dock__eq" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span class="dock__x" aria-hidden="true"></span>
+      <span class="dock__lbl" id="dockMusicLbl">ambient.fm</span>
     </button>
     <button type="button" class="dock__btn" id="dockChat" aria-label="Ask about Ryan" aria-expanded="false" title="Ask about Ryan">
       <svg viewBox="0 0 16 16" aria-hidden="true" class="dock__ico"><path d="M2.5 4.2h11v7h-6l-3.2 2.6v-2.6h-1.8z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+      <span class="dock__x" aria-hidden="true"></span>
+      <span class="dock__lbl">ask.ryan</span>
     </button>
   </div>
 
@@ -2373,16 +2640,19 @@
   <div class="panel panel--music" id="musicPanel" role="dialog" aria-label="Ambient audio" hidden>
     <div class="ide">
       <div class="ide__bar">
-        <span class="lamps" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="lamps lamps--win">
+          <button type="button" data-win="close" aria-label="Close ambient audio"></button>
+          <button type="button" data-win="min" aria-label="Minimize to dock"></button>
+          <button type="button" data-win="max" aria-label="Zoom"></button>
+        </span>
         <span class="ide__file">ambient.fm</span>
-        <button type="button" class="panel__x" data-close-panel aria-label="Close">&times;</button>
       </div>
       <div class="panel__body">
         <div class="mus__now" id="musNow"><span class="mus__dot" aria-hidden="true"></span><span id="musLabel">nothing playing</span></div>
         <div class="mus__row">
           <button type="button" class="mus__play" id="musPlay" aria-label="Play or pause">play</button>
           <label class="mus__vol"><span class="sr-only">Volume</span>
-            <input type="range" id="musVol" min="0" max="100" value="35" aria-label="Volume" />
+            <input type="range" id="musVol" min="0" max="100" value="48" aria-label="Volume" />
           </label>
         </div>
         <p class="panel__lbl">Stations</p>
@@ -2402,9 +2672,12 @@
   <div class="panel panel--chat" id="chatPanel" role="dialog" aria-label="Ask about Ryan" hidden>
     <div class="ide">
       <div class="ide__bar">
-        <span class="lamps" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="lamps lamps--win">
+          <button type="button" data-win="close" aria-label="Close chat"></button>
+          <button type="button" data-win="min" aria-label="Minimize to dock"></button>
+          <button type="button" data-win="max" aria-label="Zoom"></button>
+        </span>
         <span class="ide__file">ask.ryan</span>
-        <button type="button" class="panel__x" data-close-panel aria-label="Close">&times;</button>
       </div>
       <div class="chat__log" id="chatLog" aria-live="polite"></div>
       <div class="chat__chips" id="chatChips">
@@ -2798,7 +3071,14 @@
   function armAudio(){ unlockAudio(); primeSfxPool();
     // The ambient bed starts as soon as audio is legally unlockable, so the site is never
     // silent while the visitor is on it (Ryan). One-shot; the dock owns it from then on.
-    if(!musArmed){ musArmed=true; setTimeout(function(){ try{ if(window.__musicAutostart) window.__musicAutostart(); }catch(_){} }, 260); } }
+    // A LATCH, not just a call: this fires on the first gesture, which can easily land before
+    // the dock script has defined __musicAutostart (it lives in the motion layer, further down
+    // the file). The old code called the function if it happened to exist and set musArmed
+    // either way, so an early click meant the room stayed silent for the whole visit and the
+    // visitor had to open the panel and pick a station by hand. Now the flag is the source of
+    // truth and whichever side is ready second does the starting.
+    if(!musArmed){ musArmed=true; window.__audioLive=true;
+      setTimeout(function(){ try{ if(window.__musicAutostart) window.__musicAutostart(); }catch(_){} }, 260); } }
   ['pointerdown','pointerup','click','keydown','wheel','touchstart'].forEach(function(type){
     addEventListener(type, armAudio, { capture:true, passive:true });
   });
@@ -3957,16 +4237,20 @@
   function showBootGate(onEnter){
     var el=document.getElementById('bootGate'); if(!el) return false;
     var card=el.querySelector('.ide'),
-        cmd=el.querySelector('.bootcmd'),
+        code=el.querySelector('.ide__code'),
+        live=el.querySelector('.ide__ln.is-live'),
+        sh=el.querySelector('.bootsh'),
         type=document.getElementById('bootType'),
-        outs=el.querySelectorAll('.bootout'),
+        shT=document.getElementById('bootShT'),
+        outs=el.querySelectorAll('.bootout, .bootret'),
+        cmd=el.querySelector('.bootcmd'),
         cur=document.getElementById('bootCur'),
         go=document.getElementById('bootGo'), mute=document.getElementById('bootMute');
     var G=window.gsap, done=false;
-    // The line the REPL "writes". Tokenised so it can be typed AND syntax-coloured at once:
-    // typing plain text then swapping in highlighted HTML would visibly reflow.
-    var TOK=[['kw','await '],['fn','ryan'],['op','.'],['fn','resume'],['brace','({ '],
-             ['key','sound'],['op',': '],['bool','true'],['brace',' })']];
+    // The line the editor is missing. Tokenised so it can be typed AND syntax-coloured at once:
+    // typing plain text and then swapping in highlighted HTML would visibly reflow.
+    var TOK=[['v','s'],['op','.'],['f','enable_audio'],['op','();']];
+    var SHELL='c++ -O2 session.cpp -o ryan && ./ryan';
     var FULL=TOK.reduce(function(n,t){ return n+t[1].length; },0);
     function typeTo(n){                                   // render the first n characters, coloured
       var html='', used=0;
@@ -3989,12 +4273,15 @@
       var n={i:0};
       G.timeline({defaults:{ease:'power3.out'}})
        .from(card,{y:16,scale:.97,autoAlpha:0,duration:.42})
-       .from(cmd,{autoAlpha:0,duration:.2},'-=.20')
-       // The code writes ITSELF in, at a human keying rate. steps() so characters land
+       // The file arrives line by line, the way a file opens in an editor, so the eye has
+       // somewhere to go before the one incomplete line starts writing itself.
+       .from(code.querySelectorAll('.ide__ln'),{autoAlpha:0,x:-5,duration:.2,stagger:.045},'-=.24')
+       .from(live,{backgroundColor:'rgba(255,42,18,.22)',duration:.45},'-=.18')
+       // The missing line writes ITSELF, at a human keying rate. steps() so characters land
        // discretely like keystrokes instead of smearing.
-       .to(n,{i:FULL,duration:.62,ease:'steps('+FULL+')',onUpdate:function(){ typeTo(Math.round(n.i)); }},'-=.06')
-       .from([go,mute],{y:5,autoAlpha:0,duration:.3,stagger:.05},'-=.10');
-      if(cur) G.to(cur,{autoAlpha:0,duration:.5,ease:'steps(1)',repeat:-1,yoyo:true,delay:1.05});
+       .to(n,{i:FULL,duration:.66,ease:'steps('+FULL+')',onUpdate:function(){ typeTo(Math.round(n.i)); }},'-=.30')
+       .from([go,mute],{y:5,autoAlpha:0,duration:.3,stagger:.05},'-=.12');
+      if(cur) G.to(cur,{autoAlpha:0,duration:.5,ease:'steps(1)',repeat:-1,yoyo:true,delay:1.15});
     } else { el.style.opacity=1; typeTo(FULL); if(G) G.set(outs,{autoAlpha:0}); }
     try{ go && go.focus({preventScroll:true}); }catch(_){}
     function cleanup(){ document.removeEventListener('keydown', onKey, true); el.removeEventListener('click', onBg);
@@ -4012,9 +4299,18 @@
         t.to(go,{scale:.96,duration:.07,ease:'power2.in'})                 // press
          .to(go,{scale:1,duration:.16,ease:'back.out(3)'});                // release
         if(ran){
+          // BUILD AND RUN. The compile command types into the shell pane, then the program's
+          // output arrives a line at a time. Audio was just unlocked by the very click that
+          // started this, so each line lands WITH a tick: the first thing the visitor hears is
+          // their own command reporting back, which is the whole point of the gate.
+          var c={i:0};
           t.to(cur,{autoAlpha:0,duration:.08},'-=.16')                     // caret stops: it is executing
-           .to(outs,{autoAlpha:1,y:0,duration:.16,stagger:.085,ease:'power2.out'},'-=.06')
-           .to({},{duration:.16});                                         // let "ready" land before leaving
+           .set(live,{clearProps:'backgroundColor'})
+           .to(c,{i:SHELL.length,duration:.36,ease:'steps('+SHELL.length+')',
+                  onUpdate:function(){ if(shT) shT.textContent=SHELL.slice(0,Math.round(c.i)); }})
+           .to(outs,{autoAlpha:1,y:0,duration:.14,stagger:{each:.11,
+                  onStart:function(){ try{ playSound('tick'); }catch(_){} }},ease:'power2.out'},'+=.06')
+           .to({},{duration:.2});                                          // let "exit 0" land before leaving
         }
         t.to(card,{y:-8,scale:.985,autoAlpha:0,duration:.36})
          .to(mute,{autoAlpha:0,duration:.2},'<')
@@ -4184,37 +4480,58 @@
   }
 
   var cur = document.getElementById('cursor');
-  if(cur && matchMedia('(hover:hover)').matches){
+  if(cur && matchMedia('(hover:hover)').matches && !matchMedia('(prefers-reduced-motion:reduce)').matches){
+    var curDot=document.getElementById('curDot'), curRing=document.getElementById('curRing');
     var cx=innerWidth/2, cy=innerHeight/2, tx=cx, ty=cy, curRaf=0;
-    // The custom dot exists ONLY for the hook (`body.site-ready .cursor{display:none}`
-    // and the native cursor comes back). This loop used to self-call forever, so for the
-    // whole visit it woke the main thread every frame to write a transform onto a
-    // display:none element. Now it stops dead at site-ready and idles once settled.
-    function curDone(){ return document.body.classList.contains('site-ready'); }
+    document.documentElement.classList.add('cur-on');   // only now is the native cursor hidden
+    /* The DOT is written straight from the event: a pointer that lags behind the real position
+       feels broken no matter how nice the easing is. Only the RING is eased, which is what
+       gives the thing weight.
+       PERF (do not regress to a forever-loop): the loop used to self-call every frame for the
+       whole visit, waking the main thread to move an element that was not even displayed. It
+       now runs ONLY while the ring is still catching up and stops the moment it has. */
     function curTick(){
       curRaf=0;
-      if(curDone()) return;
-      cx+=(tx-cx)*.2; cy+=(ty-cy)*.2;
-      cur.style.transform='translate('+cx+'px,'+cy+'px) translate(-50%,-50%)';
+      cx+=(tx-cx)*.19; cy+=(ty-cy)*.19;
+      curRing.style.transform='translate('+cx+'px,'+cy+'px) translate(-50%,-50%)';
       if(Math.abs(tx-cx)>.1 || Math.abs(ty-cy)>.1) curRaf=requestAnimationFrame(curTick);
+      else { cx=tx; cy=ty; curRing.style.transform='translate('+tx+'px,'+ty+'px) translate(-50%,-50%)'; }
     }
-    function kickCur(){ if(!curRaf && !curDone()) curRaf=requestAnimationFrame(curTick); }
-    addEventListener('mousemove',function(e){ tx=e.clientX; ty=e.clientY; kickCur(); });
-    kickCur();
+    function kickCur(){ if(!curRaf) curRaf=requestAnimationFrame(curTick); }
+    addEventListener('pointermove',function(e){
+      if(e.pointerType && e.pointerType!=='mouse') return;
+      tx=e.clientX; ty=e.clientY;
+      curDot.style.transform='translate('+tx+'px,'+ty+'px) translate(-50%,-50%)';
+      if(cur.classList.contains('is-out')) cur.classList.remove('is-out');
+      kickCur();
+    }, {passive:true});
+    // leaving the window must hide it, or the ring is left stranded at the edge
+    document.addEventListener('mouseleave', function(){ cur.classList.add('is-out'); });
+    document.addEventListener('mouseenter', function(){ cur.classList.remove('is-out'); });
+    // PRESS state. Capture phase and on window, so a press that ends outside the element (or
+    // outside the document) still releases the state instead of sticking.
+    addEventListener('pointerdown',function(e){ if(!e.pointerType||e.pointerType==='mouse') cur.classList.add('is-down'); },true);
+    ['pointerup','pointercancel','blur'].forEach(function(t){
+      addEventListener(t,function(){ cur.classList.remove('is-down'); },true); });
     // DELEGATED hover: covers dynamically created controls too (carousel caption,
     // expand modal, peek card, dots/ticks/arrows) which a load-time querySelectorAll
     // missed. One 'hover' cue per newly entered control; the 70ms gate rate-limits.
     var HOVER_SEL='a,button,[role="button"],.proj.is-center,.sp-row,.cflow__dots b,'+
-      '.peek__frame,.pm-arw,.pmodal__ticks i,.proj__ticks i,.brand-menu__item,.mnote__x,.totop,.lamps i';
+      '.peek__frame,.pm-arw,.pmodal__ticks i,.proj__ticks i,.brand-menu__item,.mnote__x,.totop,.lamps i,'+
+      '.lamps--win button,.react__chip,.mus__item,.dock__btn,.hook';
+    // anything you can type into or select gets the caret form instead
+    var TEXT_SEL='input[type="text"],input:not([type]),textarea,[contenteditable="true"]';
     var lastHov=null;
     document.body.addEventListener('pointerover',function(e){
       if(e.pointerType && e.pointerType!=='mouse') return;
-      var el=e.target.closest?e.target.closest(HOVER_SEL):null; if(!el) return;
-      if(el!==lastHov){ lastHov=el; cur.classList.add('link'); playSound('hover'); }
+      var t=e.target.closest?e.target:null; if(!t) return;
+      cur.classList.toggle('is-text', !!t.closest(TEXT_SEL));
+      var el=t.closest(HOVER_SEL); if(!el) return;
+      if(el!==lastHov){ lastHov=el; cur.classList.add('is-link'); playSound('hover'); }
     });
     document.body.addEventListener('pointerout',function(e){
       var el=e.target.closest?e.target.closest(HOVER_SEL):null;
-      if(el && el===lastHov){ lastHov=null; cur.classList.remove('link'); }
+      if(el && el===lastHov){ lastHov=null; cur.classList.remove('is-link'); }
     });
   }
 
@@ -4269,49 +4586,130 @@
      via an ntfy.sh topic (no signup, low security, by design - Ryan's call). Real marketing
      signal comes AFTER they've seen it, not a premature "rate me" up front. */
   (function(){
-    // --- where reactions go. Ryan: open this URL (or the ntfy app) on your phone to watch:
-    //     https://ntfy.sh/ryan-portfolio-signal-8k3xq2   (change the topic to your own) ---
-    var REACT_TOPIC='ryan-portfolio-signal-8k3xq2';
+    /* WHERE REACTIONS GO. Push notifications were not something Ryan could rely on, so this
+       posts to the same Cloudflare Worker the chat uses. The Worker writes every reaction to a
+       KV store (the copy that always exists, readable at /admin with the admin key) and mails
+       it on. Storage first, mail second: an inbox can be filtered, a provider can be swapped,
+       and a notification that nobody saw is the same as no notification.
+       The Worker also rate limits, which is why the page sends the two ids below. */
+    var REACT_URL='https://ryan-chat.ryandev1st.workers.dev/react';
     var box=document.getElementById('exitReact'); if(!box) return;
     var seen=false; try{ seen = SS && SS.getItem('ryan_reactseen')==='1'; }catch(_){}
     if(seen) return;
     var row=document.getElementById('reactRow'), note=document.getElementById('reactNote'),
         msg=document.getElementById('reactMsg'), send=document.getElementById('reactSend'),
-        thanks=document.getElementById('reactThanks'), x=document.getElementById('reactX');
-    var TAGS={ hire:'zap', solid:'eyes', meh:'thinking_face' };
+        thanks=document.getElementById('reactThanks'), thanksT=document.getElementById('reactThanksT'),
+        x=document.getElementById('reactX'), card=box.querySelector('.ide');
+    var G=window.gsap;
     var shown=false, picked=null;
+    /* Two of the three things the rate limiter counts (the third is the IP, which only the
+       Worker can see). Neither identifies anybody: the device id is a random value this browser
+       generated for itself, and the fingerprint is a digest of coarse, non-unique display and
+       locale properties. The Worker salts and hashes both again before storing them, so what
+       ends up in KV cannot be turned back into either. Three signals rather than one because
+       any single one is trivial to shed: clearing storage resets the device id, a window resize
+       or browser update moves the fingerprint, and a phone changes IP by walking outdoors. */
+    function deviceId(){
+      try{
+        var k='ryan_dev', v=localStorage.getItem(k);
+        if(!v){ v=(Math.random().toString(36)+Math.random().toString(36)).replace(/[^a-z0-9]/g,'').slice(0,24);
+          localStorage.setItem(k,v); }
+        return v;
+      }catch(_){ return ''; }
+    }
+    function fingerprint(){
+      try{
+        var n=navigator, s=screen;
+        var raw=[n.userAgent||'', n.language||'', (n.languages||[]).join(','), n.platform||'',
+                 n.hardwareConcurrency||0, n.maxTouchPoints||0,
+                 s.width+'x'+s.height, s.colorDepth||0, devicePixelRatio||1,
+                 (Intl.DateTimeFormat().resolvedOptions().timeZone)||''].join('|');
+        var h=5381; for(var i=0;i<raw.length;i++){ h=((h*33) ^ raw.charCodeAt(i)) >>> 0; }
+        return 'f'+h.toString(36)+raw.length.toString(36);
+      }catch(_){ return ''; }
+    }
     function post(reaction, text){
       try{
-        fetch('https://ntfy.sh', { method:'POST', keepalive:true,
-          body: JSON.stringify({ topic:REACT_TOPIC,
-            title:'Portfolio: '+reaction,
-            message:(text?text:'(no note)')+'  |  '+((location.host)||'local')+((navigator.userAgent&&/Mobi/.test(navigator.userAgent))?' | mobile':''),
-            tags:[TAGS[reaction]||'star'] }) }).catch(function(){});
+        // keepalive: the tap that sends this is very often the last thing the visitor does on
+        // the page, and without it the browser cancels the request as the tab goes away.
+        fetch(REACT_URL, { method:'POST', keepalive:true,
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ r:reaction, note:text||'',
+            host:(location.host||'local'), ref:(document.referrer||'').slice(0,120),
+            mobile:!!(navigator.userAgent&&/Mobi/.test(navigator.userAgent)),
+            dev:deviceId(), fp:fingerprint() }) }).catch(function(){});
       }catch(_){}
     }
     function markSeen(){ try{ if(SS) SS.setItem('ryan_reactseen','1'); }catch(_){} }
-    function hide(){ box.classList.remove('is-show'); markSeen(); setTimeout(function(){ box.hidden=true; }, 480); }
-    function show(){ if(shown) return; shown=true; box.hidden=false;
-      requestAnimationFrame(function(){ box.classList.add('is-show'); }); }
+    function hide(){
+      markSeen();
+      if(G && !reduce){
+        G.to(card,{y:10,scale:.98,autoAlpha:0,duration:.34,ease:'power2.in',
+          onComplete:function(){ box.hidden=true; box.classList.remove('is-show'); }});
+      } else { box.hidden=true; box.classList.remove('is-show'); }
+    }
+    // Both this and the dock panels live in the bottom-right corner, so they must never be on
+    // screen together. This one YIELDS: a visitor who has opened the chat is already engaged
+    // and interrupting them with a rating box is exactly the wrong trade. It waits and asks
+    // later instead.
+    function busy(){ return !!document.querySelector('.panel:not([hidden])'); }
+    var waits=0;
+    function show(){
+      if(shown) return;
+      if(busy() && waits++ < 12){ setTimeout(show, 5000); return; }
+      shown=true;
+      box.hidden=false; box.classList.add('is-show');
+      if(G && !reduce){
+        G.from(card,{y:18,scale:.94,autoAlpha:0,duration:.52,ease:'back.out(1.6)',
+          transformOrigin:'100% 100%'});
+      }
+    }
+    // If a dock panel opens while this is up, it gets out of the way (and stays gone: it has
+    // already been seen, and asking twice in one session is nagging).
+    window.__reactYield=function(){ if(shown && !box.hidden) hide(); };
+    // The receipt TYPES rather than appearing, for the same reason the boot gate types: this
+    // site answers an action with something happening, not with a label swapping in.
+    function receipt(text, after){
+      if(!thanks) { if(after) after(); return; }
+      thanks.hidden=false;
+      if(!(G && !reduce)){ if(thanksT) thanksT.textContent=text; if(after) setTimeout(after,900); return; }
+      var n={i:0};
+      G.timeline({onComplete:function(){ if(after) after(); }})
+       .from(thanks,{autoAlpha:0,duration:.18})
+       .to(n,{i:text.length,duration:.34,ease:'steps('+text.length+')',
+              onUpdate:function(){ if(thanksT) thanksT.textContent=text.slice(0,Math.round(n.i)); }},'<')
+       .to({},{duration:1.0});
+    }
     function commit(text){
       if(!picked) return;
-      post(picked.r, text||'');
-      row.style.pointerEvents='none';
-      if(note) note.classList.remove('is-open');
-      if(thanks) thanks.hidden=false;
+      if(text) post(picked.r, text);        // the chip already went; this carries the note
+      if(note && G && !reduce) G.to(note,{height:0,autoAlpha:0,duration:.24,ease:'power2.in'});
+      else if(note){ note.style.height='0'; note.style.opacity='0'; }
+      if(send) send.disabled=true;
       markSeen();
-      setTimeout(hide, 1500);
+      receipt(text ? 'note sent to Ryan' : 'signal sent to Ryan', hide);
     }
     if(row) row.addEventListener('click', function(e){
       var chip=e.target.closest('.react__chip'); if(!chip) return;
+      if(picked) return;                                   // the answer is committed, not re-pickable
       try{ playSound('toggle'); }catch(_){}
-      [].forEach.call(row.querySelectorAll('.react__chip'), function(c){ c.classList.remove('is-picked'); });
       chip.classList.add('is-picked');
+      row.classList.add('is-done');
       picked={ r:chip.getAttribute('data-react') };
-      // capture the core signal immediately (most people tap and leave), then invite a note
+      // Capture the core signal IMMEDIATELY. Most people tap and leave, so the tap must be the
+      // thing that is recorded; the note is a bonus that many will never reach.
       post(picked.r, '');
       markSeen();
-      if(note){ note.classList.add('is-open'); if(msg){ try{ msg.focus(); }catch(_){} } }
+      // The picked chip grows into the space the other two vacate, then the note slides in.
+      // One motion, so the panel reads as changing state rather than as items disappearing.
+      if(G && !reduce){
+        G.timeline({defaults:{ease:'power3.out'}})
+         .to(chip,{scale:1.04,duration:.12,ease:'power2.out'})
+         .to(chip,{scale:1,duration:.28,ease:'back.out(2.4)'})
+         .to(row.querySelectorAll('.react__chip:not(.is-picked)'),{autoAlpha:0,duration:.2},'<-.1')
+         .to(note,{height:'auto',autoAlpha:1,duration:.32},'-=.16')
+         .add(function(){ if(msg) try{ msg.focus({preventScroll:true}); }catch(_){} });
+      } else if(note){ note.style.height='auto'; note.style.opacity='1'; }
     });
     if(send) send.addEventListener('click', function(){ try{ playSound('nav'); }catch(_){} commit(msg&&msg.value.trim()); });
     if(msg) msg.addEventListener('keydown', function(e){ if(e.key==='Enter'){ e.preventDefault(); commit(msg.value.trim()); } });
@@ -4340,26 +4738,122 @@
     var panels={ music:{btn:document.getElementById('dockMusic'), el:document.getElementById('musicPanel')},
                  chat: {btn:document.getElementById('dockChat'),  el:document.getElementById('chatPanel')} };
     var open=null;
-    function close(k,instant){
+    /* macOS window semantics, honestly implemented. The three states differ in what SURVIVES:
+         close    - the window goes away and its dock tile goes back to a bare icon
+         minimise - the window parks in the dock as a LABELLED tile, still doing its job
+                    (audio keeps playing, the chat keeps its transcript)
+         zoom     - the window stays put and grows
+       Minimise is the one that earns its place: audio is the obvious case for a window you
+       want out of the way but not stopped. */
+    var minned={ music:false, chat:false };
+    function dockLabel(k){
+      var b=panels[k].btn; if(!b) return;
+      var lbl=b.querySelector('.dock__lbl'); if(!lbl) return;
+      if(k==='music'){
+        // a minimised player should say what is playing, not what the window is called
+        var st=window.__musNow && window.__musNow();
+        lbl.textContent = st || 'ambient.fm';
+      }
+    }
+    function setMin(k,on){
+      minned[k]=on;
+      if(panels[k].btn){
+        panels[k].btn.classList.toggle('is-min',on);
+        panels[k].btn.setAttribute('title', on ? 'Restore' : (k==='music'?'Ambient audio':'Ask about Ryan'));
+      }
+      if(on) dockLabel(k);
+    }
+    // `to` is where the window is going: 'dock' plays the genie toward the dock tile and leaves
+    // the tile labelled, anything else is a plain close.
+    function close(k,instant,to){
       var p=panels[k]; if(!p||p.el.hidden) return;
       p.btn.setAttribute('aria-expanded','false');
+      var genie = to==='dock';
       if(G && !reduce && !instant){
-        G.to(p.el,{y:8,autoAlpha:0,duration:.22,ease:'power2.in',
-          onComplete:function(){ p.el.hidden=true; }});
+        // toward the bottom-right corner, which is where the dock actually is: the window
+        // visibly goes INTO its tile rather than just fading out where it stood.
+        G.to(p.el, genie
+          ? {y:26,x:14,scaleX:.5,scaleY:.28,autoAlpha:0,duration:.3,ease:'power3.in',
+             transformOrigin:'100% 100%',
+             onComplete:function(){ p.el.hidden=true; G.set(p.el,{clearProps:'transform'}); }}
+          // a plain close still RETREATS toward the dock, just without the genie squash, so
+          // closing and minimising are recognisably the same object going the same way
+          : {y:10,scale:.93,autoAlpha:0,duration:.24,ease:'power2.in',transformOrigin:'100% 100%',
+             onComplete:function(){ p.el.hidden=true; G.set(p.el,{clearProps:'transform'}); }});
       } else { p.el.hidden=true; }
+      if(!genie) setMin(k,false);
       if(open===k) open=null;
     }
     function show(k){
       if(open && open!==k) close(open,true);
       var p=panels[k]; if(!p) return;
       if(!p.el.hidden){ close(k); try{ playSound('collapse'); }catch(_){} return; }
+      try{ if(window.__reactYield) window.__reactYield(); }catch(_){}   // one window per corner
+      var wasMin=minned[k];
+      setMin(k,false);
       p.el.hidden=false; p.btn.setAttribute('aria-expanded','true'); open=k;
       try{ playSound('expand'); }catch(_){}
-      if(G && !reduce) G.fromTo(p.el,{y:10,autoAlpha:0},{y:0,autoAlpha:1,duration:.3,ease:'power3.out'});
-      var f=p.el.querySelector('input,button'); if(k==='chat'){ var ci=document.getElementById('chatInput'); if(ci) try{ ci.focus({preventScroll:true}); }catch(_){} }
+      /* ONE spring, not a cascade. An earlier pass sprang the shell AND staggered ten child
+         rows behind it; two animations competing over the same half second read as busy and
+         slightly broken, not as polish. The window is a single physical object, so it moves
+         as one: it grows out of the dock tile it was launched from, overshoots slightly, and
+         settles. The contents ride along and just resolve, one tween, no stagger. */
+      if(G && !reduce){
+        var body=p.el.querySelector('.ide');
+        G.fromTo(p.el,
+          wasMin?{y:26,x:14,scaleX:.5,scaleY:.28,autoAlpha:0,transformOrigin:'100% 100%'}
+                :{y:14,scale:.9,autoAlpha:0,transformOrigin:'100% 100%'},
+          {y:0,x:0,scale:1,scaleX:1,scaleY:1,autoAlpha:1,duration:.44,
+           ease:'back.out(1.6)',clearProps:'transform'});
+        // content resolves a hair behind the shell so the glass reads as filling with light
+        if(body) G.fromTo(body.children,{autoAlpha:0},{autoAlpha:1,duration:.26,ease:'power2.out',delay:.07});
+      }
+      if(k==='chat'){ var ci=document.getElementById('chatInput'); if(ci) try{ ci.focus({preventScroll:true}); }catch(_){} }
     }
     Object.keys(panels).forEach(function(k){
       if(panels[k].btn) panels[k].btn.addEventListener('click', function(e){ e.stopPropagation(); show(k); });
+    });
+    // Window controls, delegated per panel so the two panels share one implementation.
+    Object.keys(panels).forEach(function(k){
+      var el=panels[k].el; if(!el) return;
+      var bar=el.querySelector('.lamps--win'); if(!bar) return;
+      bar.addEventListener('click', function(e){
+        var b=e.target.closest('button[data-win]'); if(!b) return;
+        e.stopPropagation();
+        var act=b.getAttribute('data-win');
+        if(act==='close'){ try{ playSound('collapse'); }catch(_){} close(k); return; }
+        if(act==='min'){ try{ playSound('collapse'); }catch(_){} setMin(k,true); close(k,false,'dock'); return; }
+        /* ZOOM. The class change resizes the window instantly, so the growth is animated by
+           measuring both sizes and springing the scale from the OLD shape to the new one. A
+           fixed blip (the previous 1.5% nudge) looked the same whether the window doubled or
+           barely moved, which is why it read as decoration rather than as the window resizing. */
+        var r0=el.getBoundingClientRect();
+        var max=el.classList.toggle('is-max');
+        try{ playSound(max?'expand':'collapse'); }catch(_){}
+        if(G && !reduce){
+          var r1=el.getBoundingClientRect();
+          G.fromTo(el,{scaleX:r0.width/r1.width, scaleY:r0.height/r1.height, transformOrigin:'100% 100%'},
+            {scaleX:1,scaleY:1,duration:.5,ease:'back.out(1.5)',clearProps:'transform'});
+        }
+      });
+    });
+    /* PRESS FEEDBACK. The panels had colour-only hover states and nothing at all on the press,
+       so every control felt like a link rather than a physical button. This gives the whole
+       dock one shared touch response: the control gives under the finger and springs back when
+       released. Delegated, so it covers the station rows and search results that are rendered
+       later, and pointer based so it fires on the press rather than on the click. */
+    function pressable(t){ return t && t.closest &&
+      t.closest('.dock__btn,.mus__item,.mus__play,.mus__find button,.chat__form button,.chat__chips button,.react__chip,.react__send'); }
+    function press(el,down){
+      if(!G || reduce || !el) return;
+      G.to(el,{scale:down?.94:1,duration:down?.09:.42,
+        ease:down?'power2.out':'elastic.out(1,.55)',overwrite:'auto'});
+    }
+    ['pointerdown','pointerup','pointercancel','pointerleave'].forEach(function(type){
+      document.addEventListener(type, function(e){
+        var el=pressable(e.target); if(!el) return;
+        press(el, type==='pointerdown');
+      }, true);
     });
     document.addEventListener('click', function(e){
       if(!open) return;
@@ -4367,9 +4861,8 @@
       close(open);
     });
     document.addEventListener('keydown', function(e){ if(e.key==='Escape' && open) close(open); });
-    [].forEach.call(document.querySelectorAll('[data-close-panel]'), function(b){
-      b.addEventListener('click', function(e){ e.stopPropagation(); if(open) close(open); });
-    });
+    // Keeps a minimised audio tile honest: the station can change while the window is parked.
+    window.__dockSync=function(){ Object.keys(minned).forEach(function(k){ if(minned[k]) dockLabel(k); }); };
     // The dock appears once the site is actually up, so it never competes with the hook/hero.
     var w=setInterval(function(){
       if(document.body.classList.contains('site-ready')){ clearInterval(w);
@@ -4404,9 +4897,17 @@
         btnMusic=document.getElementById('dockMusic');
     function LSget(k){ try{ return localStorage.getItem(k); }catch(_){ return null; } }
     function LSset(k,v){ try{ localStorage.setItem(k,v); }catch(_){} }
+    /* Default level, Ryan's pick. It is high enough to actually be present in the room rather
+       than a rumour, and it is the SAME number everywhere: the slider, the first autostart and
+       a returning visit all read this one value. An earlier version defaulted to 35 and then
+       clamped the autostart to 35 as well, so the bed could never come up to the level Ryan
+       wanted no matter what the slider said. Whatever the visitor sets wins from then on, and
+       it persists across visits in ryan_musvol. */
+    var VOL_DEFAULT=48;
+    function volWant(){ var v=parseInt(LSget('ryan_musvol'),10); return (v>=0&&v<=100)?v:VOL_DEFAULT; }
     function audio(){
       if(!au){ au=new Audio(); au.preload='none'; au.crossOrigin=null;
-        au.volume=(parseInt(LSget('ryan_musvol')||'35',10))/100;
+        au.volume=volWant()/100;
         au.addEventListener('playing', function(){ setLive(true); });
         au.addEventListener('pause',   function(){ setLive(false); });
         au.addEventListener('error',   function(){ if(cur) note('stream unavailable, try another'); setLive(false); });
@@ -4419,7 +4920,11 @@
       if(elPanel) elPanel.classList.toggle('is-on', on);
       if(elPlay) elPlay.textContent = on ? 'pause' : 'play';
       if(elNow && cur) elNow.textContent = (on?'':'paused / ') + cur.n;
+      try{ if(window.__dockSync) window.__dockSync(); }catch(_){}   // a parked tile shows the station
     }
+    // What a minimised dock tile should say. Null means "nothing worth naming", and the tile
+    // falls back to the window name.
+    window.__musNow=function(){ return (musOn && cur) ? cur.n : null; };
     function note(t){ if(elNow) elNow.textContent=t; }
     function play(st){
       cur=st; LSset('ryan_station', JSON.stringify(st));
@@ -4447,8 +4952,11 @@
       if(a.paused){ a.src=a.src||cur.u; var p=a.play(); if(p&&p.catch) p.catch(function(){}); }
       else a.pause();
     });
+    // --p paints the played portion of the track; CSS alone cannot know the value
+    function volPaint(){ if(elVol) elVol.style.setProperty('--p', (parseInt(elVol.value,10)||0)+'%'); }
     if(elVol) elVol.addEventListener('input', function(){
       var v=parseInt(elVol.value,10); LSset('ryan_musvol',String(v)); if(au) au.volume=v/100;
+      volPaint();
     });
     // Search: HTTPS only (mixed content is blocked on this origin), de-duped, top by votes.
     function search(q){
@@ -4475,7 +4983,8 @@
     if(elQ) elQ.addEventListener('keydown', function(e){ if(e.key==='Enter'){ e.preventDefault(); search(elQ.value.trim()); } });
     // Restore the last station (not autoplay - just the selection) so a return visit is one tap.
     try{ var last=LSget('ryan_station'); if(last){ cur=JSON.parse(last); note('paused / '+cur.n); mark(); } }catch(_){}
-    if(elVol) elVol.value=LSget('ryan_musvol')||'35';
+    if(elVol) elVol.value=String(volWant());
+    volPaint();
     // Ryan's ask: the room should never be silent. So this fires the moment audio is legally
     // unlockable (the gate/intro click) rather than waiting for the hero to land, and it fires
     // on EVERY visit, not just the first. It comes in low (0.22) so the hero's own cues still
@@ -4486,15 +4995,19 @@
       if(LSget('ryan_musoff')==='1') return;
       var st=cur||PRESETS[0];
       var a=audio();
-      var want=parseInt(LSget('ryan_musvol')||'22',10);
-      a.volume=Math.min(want,35)/100;
-      if(elVol) elVol.value=String(Math.round(a.volume*100));
+      a.volume=volWant()/100;
+      if(elVol){ elVol.value=String(Math.round(a.volume*100)); volPaint(); }
       play(st);
     };
-    if(btnMusic) btnMusic.addEventListener('click', function(){
-      // Turning it off from the dock is an explicit opt-out; remember it.
-      if(musOn){ LSset('ryan_musoff','1'); } else { LSset('ryan_musoff','0'); }
-    });
+    // The other half of the latch in armAudio. If audio was already unlocked before this script
+    // parsed, nobody is left to call the starter, so it calls itself. Both paths are guarded by
+    // the same musOn check, so being run twice is harmless.
+    if(window.__audioLive) setTimeout(window.__musicAutostart, 200);
+    /* OPT OUT means "I pressed pause", not "I opened the window". The dock button used to write
+       ryan_musoff on every click, so simply opening the panel while music played was recorded as
+       a permanent refusal and the site never autostarted again on that device. Pause is the only
+       unambiguous no, so pause is what gets remembered. */
+    if(elPlay) elPlay.addEventListener('click', function(){ LSset('ryan_musoff', musOn ? '1' : '0'); });
 
     /* ---------------- ASK ABOUT RYAN ----------------
        One fetch, one system prompt, streamed. No retrieval layer, no tool loop: the whole
@@ -4592,10 +5105,32 @@
       }
       el.appendChild(document.createTextNode(txt.slice(last)));
     }
+    // The assistant's avatar is the site's own `>_` mark, not a face or a mascot. It is this
+    // page talking about its author, and a stock robot head would be a claim the site does not
+    // make anywhere else.
+    function avatar(){
+      var a=document.createElement('span');
+      a.className='chat__ava'; a.setAttribute('aria-hidden','true');
+      a.innerHTML='<svg viewBox="0 0 26 20" focusable="false">'+
+        '<path d="M4 4.5 L12 10 L4 15.5" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>'+
+        '<rect class="cur" x="14.5" y="13.2" width="7" height="2.6" rx="1.1"/></svg>';
+      return a;
+    }
     function bubble(txt, who){
       var d=document.createElement('div');
       d.className='chat__msg chat__msg--'+who; d.textContent=txt;
-      log.appendChild(d); log.scrollTop=log.scrollHeight; return d;
+      var mount=d;
+      if(who==='bot'){
+        var r=document.createElement('div'); r.className='chat__row';
+        r.appendChild(avatar()); r.appendChild(d); mount=r;
+      }
+      log.appendChild(mount); log.scrollTop=log.scrollHeight;
+      // Bubbles POP in from the corner they belong to, with a real overshoot. Apple's material
+      // moves like something with mass and a little give; a linear fade would read as a text
+      // log updating rather than a thing arriving.
+      if(G && !reduce) G.from(mount,{scale:.86,y:10,autoAlpha:0,duration:.44,ease:'back.out(1.9)',
+        transformOrigin: who==='me' ? '100% 100%' : '0% 100%'});
+      return d;
     }
     bubble("Ask me about Ryan, his projects, or how this site was built.", 'bot');
     function ask(q){

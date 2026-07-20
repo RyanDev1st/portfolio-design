@@ -2,3 +2,10 @@ name = "ryan-chat"
 main = "src/index.js"
 compatibility_date = "2026-07-01"
 workers_dev = true
+
+# Reaction storage. Mail can fail, a mail provider can be swapped, an inbox can be filtered;
+# this is the copy that is always written. It also holds the rate-limit counters, which is why
+# the reaction endpoint needs no second service to be reliable.
+[[kv_namespaces]]
+binding = "REACTIONS"
+id = "bb5b815d359144608696c390750b1ddf"
