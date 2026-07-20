@@ -143,13 +143,24 @@ async function handleReact(request, env, origin) {
   const key = 'r:' + (1e13 - Date.now()) + ':' + Math.random().toString(36).slice(2, 8);
   await env.REACTIONS.put(key, JSON.stringify(rec), { expirationTtl: KEEP });
 
-  await Promise.all([
-    ...gate.keys.map((k, i) => env.REACTIONS.put(k, String(gate.counts[i] + 1), { expirationTtl: WEEK })),
-    env.REACTIONS.put(dayKey, String(dayCount + 1), { expirationTtl: 60 * 60 * 36 })
-  ]);
-
   const mailed = await sendMail(env, rec);
-  return json({ ok: true, counted: true, mailed }, 200, origin);
+
+  /* The quota is spent only on a reaction that actually GOT THROUGH (Ryan). If mail is
+     configured and the provider fails, the visitor keeps their attempt: burning it would mean
+     the one submission they had was consumed by our outage, and a retry would be refused for a
+     week. The record is already in KV either way, so nothing is lost by not counting.
+     When no mail provider is configured at all, KV IS the delivery, so a successful write
+     counts. Otherwise the limiter would be permanently disabled by a missing secret, which is
+     the failure mode that leaves the endpoint wide open. */
+  const delivered = env.RESEND_KEY ? mailed : true;
+  if (delivered) {
+    await Promise.all([
+      ...gate.keys.map((k, i) => env.REACTIONS.put(k, String(gate.counts[i] + 1), { expirationTtl: WEEK })),
+      env.REACTIONS.put(dayKey, String(dayCount + 1), { expirationTtl: 60 * 60 * 36 })
+    ]);
+  }
+
+  return json({ ok: true, counted: delivered, mailed }, 200, origin);
 }
 
 /* Read the reactions back without opening the Cloudflare dashboard. Guarded by its own secret
