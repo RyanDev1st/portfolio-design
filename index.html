@@ -2788,7 +2788,11 @@
       tone(ctx,t+.13,520,.12,.012,'triangle');
     }
   }
-  function armAudio(){ unlockAudio(); primeSfxPool(); }
+  var musArmed=false;
+  function armAudio(){ unlockAudio(); primeSfxPool();
+    // The ambient bed starts as soon as audio is legally unlockable, so the site is never
+    // silent while the visitor is on it (Ryan). One-shot; the dock owns it from then on.
+    if(!musArmed){ musArmed=true; setTimeout(function(){ try{ if(window.__musicAutostart) window.__musicAutostart(); }catch(_){} }, 260); } }
   ['pointerdown','pointerup','click','keydown','wheel','touchstart'].forEach(function(type){
     addEventListener(type, armAudio, { capture:true, passive:true });
   });
@@ -4374,12 +4378,17 @@
        instead of a download. Presets are the long-standing internet picks for ambient/focus
        listening (SomaFM, listener supported). Search is Radio Browser, filtered to HTTPS
        because this site is served over HTTPS and a http:// stream is silently blocked. */
+    // CAFE, not deep space. Picked from community vote counts on Radio Browser rather than
+    // taste: Adroit Jazz Underground has ~175k votes and Classic Vinyl ~289k, which dwarf the
+    // ambient stations an earlier pass shipped (those read as sci-fi drone, wrong for a room
+    // someone is reading in). Every URL below was played end to end in a real browser first.
     var PRESETS=[
-      {n:'Groove Salad',  d:'chill downtempo', u:'https://ice1.somafm.com/groovesalad-128-mp3'},
-      {n:'Drone Zone',    d:'deep ambient',    u:'https://ice1.somafm.com/dronezone-128-mp3'},
-      {n:'Fluid',         d:'instrumental hiphop', u:'https://ice1.somafm.com/fluid-128-mp3'},
-      {n:'Deep Space One',d:'ambient electronic',  u:'https://ice1.somafm.com/deepspaceone-128-mp3'},
-      {n:'Space Station', d:'spacey ambient',  u:'https://ice1.somafm.com/spacestation-128-mp3'}
+      {n:'Adroit Jazz',   d:'cafe jazz',       u:'https://icecast.walmradio.com:8443/jazz'},
+      {n:'Bossa Beyond',  d:'bossa nova',      u:'https://ice1.somafm.com/bossa-128-mp3'},
+      {n:'Lofi Beats',    d:'lofi hiphop',     u:'https://listen.reyfm.de/lofi_320kbps.mp3'},
+      {n:'Illinois St',   d:'vintage lounge',  u:'https://ice1.somafm.com/illstreet-128-mp3'},
+      {n:'Classic Vinyl', d:'warm vinyl',      u:'https://icecast.walmradio.com:8443/classic'},
+      {n:'Groove Salad',  d:'chill downtempo', u:'https://ice1.somafm.com/groovesalad-128-mp3'}
     ];
     var au=null, cur=null, musOn=false;
     var elNow=document.getElementById('musLabel'), elPanel=document.getElementById('musicPanel'),
@@ -4461,14 +4470,18 @@
     // Restore the last station (not autoplay - just the selection) so a return visit is one tap.
     try{ var last=LSget('ryan_station'); if(last){ cur=JSON.parse(last); note('paused / '+cur.n); mark(); } }catch(_){}
     if(elVol) elVol.value=LSget('ryan_musvol')||'35';
-    // Ryan's ask: the site should not sit silent. Start quietly AFTER the hero has settled,
-    // and only if the visitor accepted sound. One click in the dock kills it, and opting out
-    // is remembered, so this never becomes something they have to fight.
+    // Ryan's ask: the room should never be silent. So this fires the moment audio is legally
+    // unlockable (the gate/intro click) rather than waiting for the hero to land, and it fires
+    // on EVERY visit, not just the first. It comes in low (0.22) so the hero's own cues still
+    // read over it. One click in the dock kills it and that opt-out is remembered, so it can
+    // never become something the visitor has to fight.
     window.__musicAutostart=function(){
       if(reduce || window.__muted || musOn) return;
       if(LSget('ryan_musoff')==='1') return;
       var st=cur||PRESETS[0];
-      var a=audio(); a.volume=Math.min(a.volume,0.22);
+      var a=audio();
+      var want=parseInt(LSget('ryan_musvol')||'22',10);
+      a.volume=Math.min(want,35)/100;
       if(elVol) elVol.value=String(Math.round(a.volume*100));
       play(st);
     };
@@ -4484,8 +4497,15 @@
        NOTE: this key ships in the page by design (Ryan's call - free-tier model, rate-limited
        on OpenRouter's side). Anything in OR_SYSTEM is therefore PUBLIC: keep it to facts that
        are already on this site. No phone, no address, no student id, no personal socials. */
-    var OR_KEY='sk-or-v1-PASTE_YOUR_OPENROUTER_KEY_HERE';
-    var OR_MODEL='google/gemma-4-31b-it:free';
+    // The page holds NO api key. It calls a tiny Cloudflare Worker that holds the OpenRouter
+    // key server-side, so the key cannot be read off this page or reused by anyone who views
+    // source. The Worker also pins the model list and caps the payload, so this endpoint
+    // cannot be turned into a general-purpose LLM for the web. Source: scratchpad/worker/.
+    var CHAT_URL='https://ryan-chat.ryandev1st.workers.dev';
+    // Free models flap: measured 429s from both gemma variants while gpt-oss and hy3 answered
+    // fine minutes apart. The Worker owns the actual model ids; the page just asks it to try
+    // the next one. Observed failure, not speculative resilience.
+    var OR_TRIES=2;
     var OR_SYSTEM=[
       "You are the assistant on Ryan's portfolio site. You answer visitors' questions about Ryan and about this site.",
       "",
@@ -4536,40 +4556,47 @@
       if(chips) chips.classList.add('is-gone');
       bubble(q,'me'); hist.push({role:'user',content:q});
       busy=true; if(send) send.disabled=true;
-      if(OR_KEY.indexOf('PASTE_YOUR') > -1){
-        bubble("The chat is not connected yet. Ryan needs to add his OpenRouter key. In the meantime his email is ryandev1st@gmail.com.", 'err');
-        busy=false; if(send) send.disabled=false; return;
-      }
       var out=bubble('','bot');
       out.innerHTML='<span class="chat__dots"><i></i><i></i><i></i></span>';
-      fetch('https://openrouter.ai/api/v1/chat/completions',{
-        method:'POST',
-        headers:{'Content-Type':'application/json','Authorization':'Bearer '+OR_KEY},
-        body:JSON.stringify({ model:OR_MODEL, stream:true, max_tokens:400, temperature:0.3,
-          messages:[{role:'system',content:OR_SYSTEM}].concat(hist.slice(-8)) })
-      }).then(function(r){
-        if(!r.ok || !r.body) throw new Error('http '+r.status);
-        var rd=r.body.getReader(), dec=new TextDecoder(), buf='', acc='';
-        return (function pump(){
-          return rd.read().then(function(res){
-            if(res.done){ hist.push({role:'assistant',content:acc}); return; }
-            buf+=dec.decode(res.value,{stream:true});
-            var parts=buf.split('\n'); buf=parts.pop();
-            parts.forEach(function(ln){
-              ln=ln.trim(); if(ln.indexOf('data:')!==0) return;
-              var p=ln.slice(5).trim(); if(!p || p==='[DONE]') return;
-              try{ var j=JSON.parse(p), t=j.choices&&j.choices[0]&&j.choices[0].delta&&j.choices[0].delta.content;
-                if(t){ acc+=t; out.textContent=acc; log.scrollTop=log.scrollHeight; }
-              }catch(_){}
+      function attempt(i){
+        if(i>=OR_TRIES) return Promise.reject(new Error('all models busy'));
+        var acc='';
+        return fetch(CHAT_URL,{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({ m:i,
+            messages:[{role:'system',content:OR_SYSTEM}].concat(hist.slice(-8)) })
+        }).then(function(r){
+          if(!r.ok || !r.body) throw new Error('http '+r.status);
+          var rd=r.body.getReader(), dec=new TextDecoder(), buf='';
+          return (function pump(){
+            return rd.read().then(function(res){
+              if(res.done) return;
+              buf+=dec.decode(res.value,{stream:true});
+              var parts=buf.split('\n'); buf=parts.pop();
+              parts.forEach(function(ln){
+                ln=ln.trim(); if(ln.indexOf('data:')!==0) return;
+                var p=ln.slice(5).trim(); if(!p || p==='[DONE]') return;
+                try{ var j=JSON.parse(p), t=j.choices&&j.choices[0]&&j.choices[0].delta&&j.choices[0].delta.content;
+                  if(t){ acc+=t; out.textContent=acc; log.scrollTop=log.scrollHeight; }
+                }catch(_){}
+              });
+              return pump();
             });
-            return pump();
-          });
-        })();
-      }).catch(function(){
+          })();
+        }).then(function(){
+          if(!acc.trim()) throw new Error('empty');            // a silent model counts as a failure
+          hist.push({role:'assistant',content:acc});
+        }).catch(function(e){
+          if(acc.trim()) throw e;                              // already showed text: do not restart mid-answer
+          out.innerHTML='<span class="chat__dots"><i></i><i></i><i></i></span>';
+          return attempt(i+1);
+        });
+      }
+      attempt(0).catch(function(){
         out.className='chat__msg chat__msg--err';
-        out.textContent="Could not reach the model just now. Ryan is at ryandev1st@gmail.com.";
+        out.textContent="The free models are busy right now. Try again in a moment, or email Ryan at ryandev1st@gmail.com.";
       }).then(function(){
-        if(!out.textContent){ out.className='chat__msg chat__msg--err'; out.textContent='No answer came back. Try rephrasing.'; }
         busy=false; if(send) send.disabled=false;
       });
     }
