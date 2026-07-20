@@ -1068,20 +1068,133 @@
   .ide--boot{width:min(92vw,400px)}
   .ide--boot .ide__code{padding-bottom:2px;min-height:104px}   /* reserve the output rows so the window never resizes mid-run (CLS + it would feel unstable) */
   .ide--boot:focus{outline:none}
-  .bootcmd .p{color:var(--signal)}                              /* the prompt: the one accent */
-  .bootcmd{transition:color .2s ease}
-  .ide__run:hover ~ .ide__meta,.ide--boot:hover .bootcmd{color:var(--fg)}   /* hovering the action pre-lights the command it will run */
-  .bootout{color:rgba(236,231,219,.5)}
-  .bootout b{color:rgba(236,231,219,.85);font-weight:400}
-  .bootout .lead{color:rgba(236,231,219,.2)}
-  .bootok{color:var(--signal)}
+  .bootcmd .p{color:var(--signal)}                              /* the REPL prompt: the one accent */
+  .bootcmd{color:var(--fg)}
+  /* Syntax colours stay inside ONE muted family so the red accent is never diluted. */
+  .bootcmd .kw{color:rgba(236,231,219,.45)}                     /* await / const */
+  .bootcmd .fn{color:var(--fg)}
+  .bootcmd .key{color:rgba(236,231,219,.62)}
+  .bootcmd .bool{color:var(--signal)}
+  .bootcmd .op,.bootcmd .brace{color:rgba(236,231,219,.35)}
+  .bootout{color:rgba(236,231,219,.55)}
+  .bootout .ok{color:var(--signal);margin-right:5px}
+  .bootret{color:rgba(236,231,219,.85)}
+  .bootret .ret{color:rgba(236,231,219,.3);margin-right:5px}
+  .bootret .brace,.bootret .op{color:rgba(236,231,219,.35)}
+  .bootret .bool{color:var(--signal)}
   .ide__run kbd{display:inline-block;margin-right:7px;padding:1px 6px;border-radius:4px;
     border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.06);
     font-family:var(--mono);font-size:11px;line-height:1.5;color:var(--fg)}
   @keyframes bootblink{0%,55%{opacity:1}56%,100%{opacity:0}}
 
+  /* ---- DOCK + PANELS (ambient audio, ask-about-Ryan) ----
+     Two small affordances, one shared window language. Kept to icon buttons so the footprint
+     is a pair of 38px pills until the visitor asks for more. */
+  .dock{position:fixed;right:18px;bottom:calc(18px + env(safe-area-inset-bottom,0px));z-index:1450;
+    display:flex;gap:8px}
+  .dock__btn{position:relative;width:38px;height:38px;display:grid;place-items:center;border-radius:10px;
+    border:1px solid rgba(255,255,255,.1);
+    background:linear-gradient(180deg, rgba(22,23,28,.9), rgba(13,14,17,.9));
+    -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);
+    box-shadow:0 8px 26px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.06);
+    color:rgba(236,231,219,.62);cursor:pointer;transition:color .2s ease,border-color .2s ease,background .2s ease}
+  .dock__btn:hover{color:var(--fg);border-color:rgba(255,42,18,.4)}
+  .dock__btn[aria-expanded="true"]{color:var(--fg);border-color:rgba(255,42,18,.55)}
+  .dock__btn:focus-visible{outline:2px solid var(--signal);outline-offset:2px}
+  .dock__ico{width:17px;height:17px}
+  /* Equaliser: the only thing that moves in the dock, and only while audio is actually on. */
+  .dock__eq{position:absolute;inset:0;display:none;align-items:flex-end;justify-content:center;gap:2px;padding-bottom:9px}
+  .dock__btn.is-live .dock__ico{display:none}
+  .dock__btn.is-live .dock__eq{display:flex}
+  .dock__eq i{width:2px;height:5px;background:var(--signal);border-radius:1px;animation:eqbar .9s ease-in-out infinite}
+  .dock__eq i:nth-child(2){animation-delay:.18s;height:11px}
+  .dock__eq i:nth-child(3){animation-delay:.36s;height:7px}
+  @keyframes eqbar{0%,100%{transform:scaleY(.4)}50%{transform:scaleY(1)}}
+  .panel{position:fixed;right:18px;bottom:calc(66px + env(safe-area-inset-bottom,0px));z-index:1460;
+    width:min(92vw,330px)}
+  .panel .ide{width:100%}
+  .panel--chat{width:min(92vw,370px)}
+  .panel__x{margin-left:auto;border:0;background:none;color:rgba(236,231,219,.4);font-size:17px;line-height:1;
+    cursor:pointer;padding:0 2px;transition:color .2s ease}
+  .panel__x:hover{color:var(--fg)}
+  .panel__body{padding:14px 15px 12px}
+  .panel__lbl{margin:14px 0 7px;font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;
+    color:rgba(236,231,219,.35)}
+  .panel__foot{margin:12px 0 0;font-family:var(--mono);font-size:9.5px;line-height:1.6;color:rgba(236,231,219,.3)}
+  .panel__foot a{color:rgba(236,231,219,.5)}
+  .panel__foot a:hover{color:var(--signal)}
+  /* music */
+  .mus__now{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11.5px;
+    color:rgba(236,231,219,.75);margin-bottom:11px;min-height:16px}
+  .mus__dot{width:6px;height:6px;border-radius:50%;background:rgba(236,231,219,.25);flex-shrink:0}
+  .mus.is-on .mus__dot,.panel--music.is-on .mus__dot{background:var(--signal);box-shadow:0 0 8px rgba(255,42,18,.7)}
+  .mus__row{display:flex;gap:10px;align-items:center}
+  .mus__play{flex:0 0 68px;padding:8px;border-radius:7px;border:1px solid rgba(255,42,18,.45);
+    background:rgba(255,42,18,.11);color:var(--fg);font-family:var(--mono);font-size:11px;letter-spacing:.12em;
+    text-transform:uppercase;cursor:pointer;transition:background .2s ease}
+  .mus__play:hover{background:rgba(255,42,18,.2)}
+  .mus__vol{flex:1;display:flex}
+  .mus__vol input{width:100%;accent-color:var(--signal);cursor:pointer}
+  .mus__list{display:flex;flex-direction:column;gap:4px;max-height:132px;overflow-y:auto;
+    scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.16) transparent}
+  .mus__list::-webkit-scrollbar{width:8px}
+  .mus__list::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:9px}
+  .mus__item{display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;
+    padding:7px 9px;border-radius:6px;border:1px solid transparent;background:rgba(255,255,255,.028);
+    color:rgba(236,231,219,.72);font-family:var(--mono);font-size:11px;text-align:left;cursor:pointer;
+    transition:background .16s ease,border-color .16s ease,color .16s ease}
+  .mus__item:hover{background:rgba(255,42,18,.09);border-color:rgba(255,42,18,.32);color:var(--fg)}
+  .mus__item.is-sel{border-color:rgba(255,42,18,.5);color:var(--fg);background:rgba(255,42,18,.12)}
+  .mus__item span{color:rgba(236,231,219,.3);font-size:9.5px;white-space:nowrap}
+  .mus__find{display:flex;gap:6px;margin-bottom:8px}
+  .mus__find input{flex:1;min-width:0;padding:7px 9px;border-radius:6px;border:1px solid rgba(255,255,255,.12);
+    background:rgba(0,0,0,.28);color:var(--fg);font-family:var(--mono);font-size:11px}
+  .mus__find input:focus{outline:none;border-color:rgba(255,42,18,.45)}
+  .mus__find button{padding:7px 11px;border-radius:6px;border:1px solid rgba(255,255,255,.14);
+    background:rgba(255,255,255,.04);color:rgba(236,231,219,.7);font-family:var(--mono);font-size:10.5px;
+    text-transform:uppercase;letter-spacing:.08em;cursor:pointer;transition:color .2s ease,border-color .2s ease}
+  .mus__find button:hover{color:var(--fg);border-color:rgba(255,42,18,.4)}
+  .mus__note{font-family:var(--mono);font-size:10.5px;color:rgba(236,231,219,.4);padding:6px 2px}
+  /* chat */
+  .chat__log{padding:13px 15px;height:250px;overflow-y:auto;display:flex;flex-direction:column;gap:9px;
+    scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.16) transparent}
+  .chat__log::-webkit-scrollbar{width:8px}
+  .chat__log::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:9px}
+  .chat__msg{max-width:88%;padding:8px 11px;border-radius:9px;font-size:12.5px;line-height:1.6;
+    white-space:pre-wrap;word-wrap:break-word}
+  .chat__msg--bot{align-self:flex-start;background:rgba(255,255,255,.045);color:rgba(236,231,219,.88);
+    border:1px solid rgba(255,255,255,.07)}
+  .chat__msg--me{align-self:flex-end;background:rgba(255,42,18,.13);border:1px solid rgba(255,42,18,.32);
+    color:var(--fg);font-family:var(--mono);font-size:11.5px}
+  .chat__msg--err{align-self:flex-start;color:rgba(236,231,219,.5);font-family:var(--mono);font-size:11px;
+    background:none;border:0;padding-left:0}
+  .chat__dots i{display:inline-block;width:4px;height:4px;margin-right:3px;border-radius:50%;
+    background:rgba(236,231,219,.5);animation:eqbar .9s ease-in-out infinite}
+  .chat__dots i:nth-child(2){animation-delay:.15s} .chat__dots i:nth-child(3){animation-delay:.3s}
+  .chat__chips{display:flex;flex-wrap:wrap;gap:5px;padding:0 15px 11px}
+  .chat__chips button{padding:5px 9px;border-radius:999px;border:1px solid rgba(255,255,255,.12);
+    background:rgba(255,255,255,.03);color:rgba(236,231,219,.6);font-family:var(--mono);font-size:10px;
+    cursor:pointer;transition:color .18s ease,border-color .18s ease}
+  .chat__chips button:hover{color:var(--fg);border-color:rgba(255,42,18,.4)}
+  .chat__chips.is-gone{display:none}
+  .chat__form{display:flex;gap:7px;padding:11px 15px 13px;border-top:1px solid rgba(255,255,255,.07)}
+  .chat__form input{flex:1;min-width:0;padding:9px 11px;border-radius:7px;border:1px solid rgba(255,255,255,.12);
+    background:rgba(0,0,0,.28);color:var(--fg);font-family:var(--mono);font-size:11.5px}
+  .chat__form input:focus{outline:none;border-color:rgba(255,42,18,.45)}
+  .chat__form button{width:36px;flex-shrink:0;border-radius:7px;border:1px solid rgba(255,42,18,.45);
+    background:rgba(255,42,18,.12);color:var(--fg);font-size:14px;cursor:pointer;transition:background .2s ease}
+  .chat__form button:hover{background:rgba(255,42,18,.22)}
+  .chat__form button[disabled]{opacity:.45;cursor:not-allowed}
+  @media (max-width:520px){
+    .panel,.panel--chat{right:10px;left:10px;width:auto}
+    .dock{right:10px}
+    .chat__log{height:210px}
+  }
+  @media (prefers-reduced-motion:reduce){ .dock__eq i,.chat__dots i{animation:none} }
+
   /* ---- EXIT REACTION ---- */
-  .react{position:fixed;right:18px;bottom:calc(18px + env(safe-area-inset-bottom,0px));z-index:1500;
+  /* sits ABOVE the dock (which owns the bottom-right corner) so the two never overlap */
+  .react{position:fixed;right:18px;bottom:calc(66px + env(safe-area-inset-bottom,0px));z-index:1500;
     width:min(90vw,320px);padding:16px 16px 14px;border-radius:13px;
     border:1px solid rgba(255,255,255,.1);
     background:linear-gradient(180deg, rgba(22,23,28,.92), rgba(13,14,17,.92));
@@ -2203,14 +2316,13 @@
         <span class="ide__file">ryan.sys</span>
       </div>
       <div class="ide__code">
-        <!-- A command the visitor RUNS, not a label they acknowledge. The cursor blinks at the
-             end of it, so the window reads as waiting for them. -->
-        <p class="ide__ln bootcmd" id="bootCmd"><span class="p">$</span> ryan --resume --sound<span class="ide__cur" id="bootCur"></span></p>
-        <!-- Output. Hidden until the command is run, then streamed in: this is the CONSEQUENCE
-             of the click, which is what the old "fade out and leave" had none of. -->
-        <p class="ide__ln bootout">audio <span class="lead">.........</span> <b>unlocked</b></p>
-        <p class="ide__ln bootout">session <span class="lead">.......</span> <b>restored</b></p>
-        <p class="ide__ln bootout bootok">ready</p>
+        <!-- A REPL, not a dialog. Real JS gets TYPED in on entrance (so it reads as written,
+             not printed), then Run evaluates it and the return value comes back. The whole
+             point is that the visitor executes a line of code, not that they dismiss a modal. -->
+        <p class="ide__ln bootcmd"><span class="p">&gt;</span> <span id="bootType"></span><span class="ide__cur" id="bootCur"></span></p>
+        <p class="ide__ln bootout"><span class="ok">&#10003;</span> audio unlocked</p>
+        <p class="ide__ln bootout"><span class="ok">&#10003;</span> session restored</p>
+        <p class="ide__ln bootout bootret"><span class="ret">&#8592;</span> <span class="brace">{</span> ready<span class="op">:</span> <span class="bool">true</span> <span class="brace">}</span></p>
       </div>
       <div class="ide__foot">
         <button type="button" class="ide__run" id="bootGo"><kbd aria-hidden="true">&#9166;</kbd> Run</button>
@@ -2237,6 +2349,68 @@
       <button type="button" class="react__send" id="reactSend">send</button>
     </div>
     <p class="react__thanks" id="reactThanks" hidden>logged. thanks for the signal.</p>
+  </div>
+
+  <!-- DOCK: two persistent affordances, bottom-right. Both panels reuse the .ide window
+       language (traffic lights, mono, one accent) so they belong to the same product. -->
+  <div class="dock" id="dock" hidden>
+    <button type="button" class="dock__btn" id="dockMusic" aria-label="Ambient audio" aria-expanded="false" title="Ambient audio">
+      <svg viewBox="0 0 16 16" aria-hidden="true" class="dock__ico"><path d="M6 12.5V4l7-1.5v8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="4.2" cy="12.5" r="1.9" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="11.2" cy="10.5" r="1.9" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+      <span class="dock__eq" aria-hidden="true"><i></i><i></i><i></i></span>
+    </button>
+    <button type="button" class="dock__btn" id="dockChat" aria-label="Ask about Ryan" aria-expanded="false" title="Ask about Ryan">
+      <svg viewBox="0 0 16 16" aria-hidden="true" class="dock__ico"><path d="M2.5 4.2h11v7h-6l-3.2 2.6v-2.6h-1.8z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+    </button>
+  </div>
+
+  <!-- AMBIENT AUDIO -->
+  <div class="panel panel--music" id="musicPanel" role="dialog" aria-label="Ambient audio" hidden>
+    <div class="ide">
+      <div class="ide__bar">
+        <span class="lamps" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="ide__file">ambient.fm</span>
+        <button type="button" class="panel__x" data-close-panel aria-label="Close">&times;</button>
+      </div>
+      <div class="panel__body">
+        <div class="mus__now" id="musNow"><span class="mus__dot" aria-hidden="true"></span><span id="musLabel">nothing playing</span></div>
+        <div class="mus__row">
+          <button type="button" class="mus__play" id="musPlay" aria-label="Play or pause">play</button>
+          <label class="mus__vol"><span class="sr-only">Volume</span>
+            <input type="range" id="musVol" min="0" max="100" value="35" aria-label="Volume" />
+          </label>
+        </div>
+        <p class="panel__lbl">Stations</p>
+        <div class="mus__list" id="musPresets"></div>
+        <p class="panel__lbl">Find your own</p>
+        <div class="mus__find">
+          <input type="text" id="musQ" placeholder="lofi, ambient, jazz, drone" aria-label="Search stations" />
+          <button type="button" id="musGo">search</button>
+        </div>
+        <div class="mus__list" id="musResults"></div>
+        <p class="panel__foot">Presets via <a href="https://somafm.com" target="_blank" rel="noopener">SomaFM</a>, listener supported. Search via <a href="https://www.radio-browser.info" target="_blank" rel="noopener">Radio Browser</a>.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ASK ABOUT RYAN -->
+  <div class="panel panel--chat" id="chatPanel" role="dialog" aria-label="Ask about Ryan" hidden>
+    <div class="ide">
+      <div class="ide__bar">
+        <span class="lamps" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="ide__file">ask.ryan</span>
+        <button type="button" class="panel__x" data-close-panel aria-label="Close">&times;</button>
+      </div>
+      <div class="chat__log" id="chatLog" aria-live="polite"></div>
+      <div class="chat__chips" id="chatChips">
+        <button type="button">What is FORGER?</button>
+        <button type="button">How was this site built?</button>
+        <button type="button">What is he best at?</button>
+      </div>
+      <form class="chat__form" id="chatForm">
+        <input type="text" id="chatInput" placeholder="Ask about Ryan or this site" aria-label="Your question" maxlength="300" autocomplete="off" />
+        <button type="submit" id="chatSend" aria-label="Send">&#8594;</button>
+      </form>
+    </div>
   </div>
 
   <div class="pmodal" id="projModal" aria-hidden="true" role="dialog" aria-modal="true" aria-label="Project detail">
@@ -3242,7 +3416,11 @@
   function hideFx(){ if(faceFx&&fxCtx){ fxCtx.clearRect(0,0,faceFx.width,faceFx.height); faceFx.style.display='none'; } }
   // Reveal is over: wipe the canvas but KEEP it (transparent, still pointer-events:none)
   // so the hover spotlight can paint into it. Nothing renders until the cursor enters.
-  function finishFx(){ if(faceFx&&fxCtx){ fxCtx.clearRect(0,0,faceFx.width,faceFx.height); faceFx.style.display='block'; } enableSpot(); portraitMode='photo'; portraitBusy=false; if(faceFrame) faceFrame.classList.remove('is-ascii'); }
+  var musKicked=false;
+  function finishFx(){ if(faceFx&&fxCtx){ fxCtx.clearRect(0,0,faceFx.width,faceFx.height); faceFx.style.display='block'; } enableSpot(); portraitMode='photo'; portraitBusy=false; if(faceFrame) faceFrame.classList.remove('is-ascii');
+    // The hero owns the room until it lands. Only then does the ambient bed fade up, and only
+    // once per load - a toggle back to the photo must not restart it.
+    if(!musKicked){ musKicked=true; setTimeout(function(){ try{ if(window.__musicAutostart) window.__musicAutostart(); }catch(_){} }, 900); } }
   function drawRest(){ if(!faceFx||!fxCtx) return; showFx(); fxCtx.clearRect(0,0,faceFx.width,faceFx.height); fxCtx.drawImage(roff,0,0,faceFx.width,faceFx.height,0,0,faceFx.width,faceFx.height); }
 
   // The `.ptag` "Ryan" label toggles the portrait between photo and ascii by playing the
@@ -3769,11 +3947,27 @@
   function showBootGate(onEnter){
     var el=document.getElementById('bootGate'); if(!el) return false;
     var card=el.querySelector('.ide'),
-        cmd=document.getElementById('bootCmd'),
+        cmd=el.querySelector('.bootcmd'),
+        type=document.getElementById('bootType'),
         outs=el.querySelectorAll('.bootout'),
         cur=document.getElementById('bootCur'),
         go=document.getElementById('bootGo'), mute=document.getElementById('bootMute');
     var G=window.gsap, done=false;
+    // The line the REPL "writes". Tokenised so it can be typed AND syntax-coloured at once:
+    // typing plain text then swapping in highlighted HTML would visibly reflow.
+    var TOK=[['kw','await '],['fn','ryan'],['op','.'],['fn','resume'],['brace','({ '],
+             ['key','sound'],['op',': '],['bool','true'],['brace',' })']];
+    var FULL=TOK.reduce(function(n,t){ return n+t[1].length; },0);
+    function typeTo(n){                                   // render the first n characters, coloured
+      var html='', used=0;
+      for(var i=0;i<TOK.length;i++){
+        if(used>=n) break;
+        var take=Math.min(TOK[i][1].length, n-used);
+        html+='<span class="'+TOK[i][0]+'">'+TOK[i][1].slice(0,take).replace(/ /g,'&nbsp;')+'</span>';
+        used+=take;
+      }
+      type.innerHTML=html;
+    }
     el.hidden=false; el.classList.add('is-show');
     // ENTRANCE (GSAP). Same motion language as the intro window, shorter because this is the
     // repeat visit: the visitor wants back in, not a performance. The output rows start
@@ -3781,12 +3975,17 @@
     if(G && !reduce){
       G.set(el,{autoAlpha:1});
       G.set(outs,{autoAlpha:0,y:4});
+      typeTo(0);
+      var n={i:0};
       G.timeline({defaults:{ease:'power3.out'}})
        .from(card,{y:16,scale:.97,autoAlpha:0,duration:.42})
-       .from(cmd,{y:5,autoAlpha:0,duration:.28},'-=.18')
-       .from([go,mute],{y:5,autoAlpha:0,duration:.3,stagger:.05},'-=.14');
-      if(cur) G.to(cur,{autoAlpha:0,duration:.5,ease:'steps(1)',repeat:-1,yoyo:true,delay:.6});
-    } else { el.style.opacity=1; if(G) G.set(outs,{autoAlpha:0}); }
+       .from(cmd,{autoAlpha:0,duration:.2},'-=.20')
+       // The code writes ITSELF in, at a human keying rate. steps() so characters land
+       // discretely like keystrokes instead of smearing.
+       .to(n,{i:FULL,duration:.62,ease:'steps('+FULL+')',onUpdate:function(){ typeTo(Math.round(n.i)); }},'-=.06')
+       .from([go,mute],{y:5,autoAlpha:0,duration:.3,stagger:.05},'-=.10');
+      if(cur) G.to(cur,{autoAlpha:0,duration:.5,ease:'steps(1)',repeat:-1,yoyo:true,delay:1.05});
+    } else { el.style.opacity=1; typeTo(FULL); if(G) G.set(outs,{autoAlpha:0}); }
     try{ go && go.focus({preventScroll:true}); }catch(_){}
     function cleanup(){ document.removeEventListener('keydown', onKey, true); el.removeEventListener('click', onBg);
       if(go) go.removeEventListener('click', onGo); if(mute) mute.removeEventListener('click', onMute); }
@@ -3794,11 +3993,12 @@
     // visitor was looking at actually executes and reports back. Button depresses on the same
     // frame as the input (immediate feedback), the caret stops, the output streams, then the
     // window leaves. ~0.5s of real payoff instead of a bare fade.
-    function hide(ran){
+    function hide(ran, after){
       if(G && !reduce){
         if(cur) G.killTweensOf(cur);
+        typeTo(FULL);                                   // impatient click: finish the line, never run a half-typed one
         var t=G.timeline({defaults:{ease:'power2.inOut'},
-          onComplete:function(){ el.hidden=true; el.classList.remove('is-show'); }});
+          onComplete:function(){ el.hidden=true; el.classList.remove('is-show'); if(after) after(); }});
         t.to(go,{scale:.96,duration:.07,ease:'power2.in'})                 // press
          .to(go,{scale:1,duration:.16,ease:'back.out(3)'});                // release
         if(ran){
@@ -3809,17 +4009,16 @@
         t.to(card,{y:-8,scale:.985,autoAlpha:0,duration:.36})
          .to(mute,{autoAlpha:0,duration:.2},'<')
          .to(el,{autoAlpha:0,duration:.3},'-=.24');
-      } else { el.hidden=true; el.classList.remove('is-show'); }
+      } else { el.hidden=true; el.classList.remove('is-show'); if(after) after(); }
     }
     function finish(withSound){
       if(done) return; done=true; cleanup();
       if(withSound){ try{ armAudio(); }catch(_){} }                                  // unlock + prime on THIS gesture
       else { window.__muted=true; try{ if(SS) SS.setItem('ryan_mute','1'); }catch(_){} }
-      hide(withSound);
-      // Start the reveal WITH the output stream, not after it. The reveal opens on its own
-      // static lead-hold, so the window clearing over the top of it costs the visitor nothing
-      // and the gate never reads as a wait.
-      if(onEnter) onEnter();
+      // The hero reveal starts only AFTER this gate has fully cleared. Running them together
+      // meant the reveal's opening beats played BEHIND the gate and the visitor only caught
+      // the tail - it looked like the hero had overshot its own animation (Ryan).
+      hide(withSound, onEnter);
     }
     function onKey(e){ if(e.key==='Escape'||e.key==='Tab') return; e.preventDefault(); finish(true); }   // any other key continues
     function onGo(e){ e.stopPropagation(); finish(true); }
@@ -4120,6 +4319,264 @@
       if(shown || (SS && SS.getItem('ryan_reactseen')==='1')) return;
       if(e.clientY<=0 && !e.relatedTarget && document.body.classList.contains('site-ready')) show();
     });
+  })();
+
+  /* ================= DOCK: ambient audio + ask-about-Ryan =================
+     Both panels share one open/close controller so only one can be open at a time and the
+     dock never becomes a wall of windows. */
+  (function(){
+    var dock=document.getElementById('dock'); if(!dock) return;
+    var G=window.gsap;
+    var panels={ music:{btn:document.getElementById('dockMusic'), el:document.getElementById('musicPanel')},
+                 chat: {btn:document.getElementById('dockChat'),  el:document.getElementById('chatPanel')} };
+    var open=null;
+    function close(k,instant){
+      var p=panels[k]; if(!p||p.el.hidden) return;
+      p.btn.setAttribute('aria-expanded','false');
+      if(G && !reduce && !instant){
+        G.to(p.el,{y:8,autoAlpha:0,duration:.22,ease:'power2.in',
+          onComplete:function(){ p.el.hidden=true; }});
+      } else { p.el.hidden=true; }
+      if(open===k) open=null;
+    }
+    function show(k){
+      if(open && open!==k) close(open,true);
+      var p=panels[k]; if(!p) return;
+      if(!p.el.hidden){ close(k); try{ playSound('collapse'); }catch(_){} return; }
+      p.el.hidden=false; p.btn.setAttribute('aria-expanded','true'); open=k;
+      try{ playSound('expand'); }catch(_){}
+      if(G && !reduce) G.fromTo(p.el,{y:10,autoAlpha:0},{y:0,autoAlpha:1,duration:.3,ease:'power3.out'});
+      var f=p.el.querySelector('input,button'); if(k==='chat'){ var ci=document.getElementById('chatInput'); if(ci) try{ ci.focus({preventScroll:true}); }catch(_){} }
+    }
+    Object.keys(panels).forEach(function(k){
+      if(panels[k].btn) panels[k].btn.addEventListener('click', function(e){ e.stopPropagation(); show(k); });
+    });
+    document.addEventListener('click', function(e){
+      if(!open) return;
+      if(panels[open].el.contains(e.target) || dock.contains(e.target)) return;
+      close(open);
+    });
+    document.addEventListener('keydown', function(e){ if(e.key==='Escape' && open) close(open); });
+    [].forEach.call(document.querySelectorAll('[data-close-panel]'), function(b){
+      b.addEventListener('click', function(e){ e.stopPropagation(); if(open) close(open); });
+    });
+    // The dock appears once the site is actually up, so it never competes with the hook/hero.
+    var w=setInterval(function(){
+      if(document.body.classList.contains('site-ready')){ clearInterval(w);
+        setTimeout(function(){ dock.hidden=false;
+          if(G && !reduce) G.from(dock,{y:10,autoAlpha:0,duration:.4,ease:'power3.out'});
+        }, 1200);
+      }
+    }, 300);
+
+    /* ---------------- AMBIENT AUDIO ----------------
+       Streams, not files: continuous, never loops audibly, and costs one <audio> element
+       instead of a download. Presets are the long-standing internet picks for ambient/focus
+       listening (SomaFM, listener supported). Search is Radio Browser, filtered to HTTPS
+       because this site is served over HTTPS and a http:// stream is silently blocked. */
+    var PRESETS=[
+      {n:'Groove Salad',  d:'chill downtempo', u:'https://ice1.somafm.com/groovesalad-128-mp3'},
+      {n:'Drone Zone',    d:'deep ambient',    u:'https://ice1.somafm.com/dronezone-128-mp3'},
+      {n:'Fluid',         d:'instrumental hiphop', u:'https://ice1.somafm.com/fluid-128-mp3'},
+      {n:'Deep Space One',d:'ambient electronic',  u:'https://ice1.somafm.com/deepspaceone-128-mp3'},
+      {n:'Space Station', d:'spacey ambient',  u:'https://ice1.somafm.com/spacestation-128-mp3'}
+    ];
+    var au=null, cur=null, musOn=false;
+    var elNow=document.getElementById('musLabel'), elPanel=document.getElementById('musicPanel'),
+        elPlay=document.getElementById('musPlay'), elVol=document.getElementById('musVol'),
+        elPre=document.getElementById('musPresets'), elRes=document.getElementById('musResults'),
+        elQ=document.getElementById('musQ'), elGo=document.getElementById('musGo'),
+        btnMusic=document.getElementById('dockMusic');
+    function LSget(k){ try{ return localStorage.getItem(k); }catch(_){ return null; } }
+    function LSset(k,v){ try{ localStorage.setItem(k,v); }catch(_){} }
+    function audio(){
+      if(!au){ au=new Audio(); au.preload='none'; au.crossOrigin=null;
+        au.volume=(parseInt(LSget('ryan_musvol')||'35',10))/100;
+        au.addEventListener('playing', function(){ setLive(true); });
+        au.addEventListener('pause',   function(){ setLive(false); });
+        au.addEventListener('error',   function(){ if(cur) note('stream unavailable, try another'); setLive(false); });
+      }
+      return au;
+    }
+    function setLive(on){
+      musOn=on;
+      if(btnMusic) btnMusic.classList.toggle('is-live', on);
+      if(elPanel) elPanel.classList.toggle('is-on', on);
+      if(elPlay) elPlay.textContent = on ? 'pause' : 'play';
+      if(elNow && cur) elNow.textContent = (on?'':'paused / ') + cur.n;
+    }
+    function note(t){ if(elNow) elNow.textContent=t; }
+    function play(st){
+      cur=st; LSset('ryan_station', JSON.stringify(st));
+      var a=audio(); a.src=st.u; note('connecting to '+st.n);
+      var p=a.play(); if(p&&p.catch) p.catch(function(){ note('tap play to start'); setLive(false); });
+      mark();
+    }
+    function mark(){
+      [].forEach.call(document.querySelectorAll('.mus__item'), function(b){
+        b.classList.toggle('is-sel', !!cur && b.getAttribute('data-u')===cur.u);
+      });
+    }
+    function row(st){
+      var b=document.createElement('button');
+      b.type='button'; b.className='mus__item'; b.setAttribute('data-u',st.u);
+      b.innerHTML='<span style="color:inherit;font-size:11px">'+esc(st.n)+'</span><span>'+esc(st.d||'')+'</span>';
+      b.addEventListener('click', function(){ play(st); });
+      return b;
+    }
+    function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+    PRESETS.forEach(function(st){ elPre.appendChild(row(st)); });
+    if(elPlay) elPlay.addEventListener('click', function(){
+      var a=audio();
+      if(!cur){ play(PRESETS[0]); return; }
+      if(a.paused){ a.src=a.src||cur.u; var p=a.play(); if(p&&p.catch) p.catch(function(){}); }
+      else a.pause();
+    });
+    if(elVol) elVol.addEventListener('input', function(){
+      var v=parseInt(elVol.value,10); LSset('ryan_musvol',String(v)); if(au) au.volume=v/100;
+    });
+    // Search: HTTPS only (mixed content is blocked on this origin), de-duped, top by votes.
+    function search(q){
+      if(!q) return;
+      elRes.innerHTML='<p class="mus__note">searching...</p>';
+      fetch('https://de1.api.radio-browser.info/json/stations/search?limit=40&hidebroken=true&order=votes&reverse=true&tag='+encodeURIComponent(q))
+        .then(function(r){ return r.json(); })
+        .then(function(list){
+          var seen={}, out=[];
+          (list||[]).forEach(function(s){
+            var u=s.url_resolved||s.url;
+            if(!u || u.indexOf('https://')!==0) return;      // http would be blocked, do not offer it
+            if(seen[s.name]) return; seen[s.name]=1;
+            out.push({n:s.name.trim().slice(0,42), d:(s.bitrate?s.bitrate+'k':''), u:u});
+          });
+          elRes.innerHTML='';
+          if(!out.length){ elRes.innerHTML='<p class="mus__note">no secure streams for that. try ambient, lofi, jazz.</p>'; return; }
+          out.slice(0,12).forEach(function(st){ elRes.appendChild(row(st)); });
+          mark();
+        })
+        .catch(function(){ elRes.innerHTML='<p class="mus__note">search unavailable right now</p>'; });
+    }
+    if(elGo) elGo.addEventListener('click', function(){ search(elQ.value.trim()); });
+    if(elQ) elQ.addEventListener('keydown', function(e){ if(e.key==='Enter'){ e.preventDefault(); search(elQ.value.trim()); } });
+    // Restore the last station (not autoplay - just the selection) so a return visit is one tap.
+    try{ var last=LSget('ryan_station'); if(last){ cur=JSON.parse(last); note('paused / '+cur.n); mark(); } }catch(_){}
+    if(elVol) elVol.value=LSget('ryan_musvol')||'35';
+    // Ryan's ask: the site should not sit silent. Start quietly AFTER the hero has settled,
+    // and only if the visitor accepted sound. One click in the dock kills it, and opting out
+    // is remembered, so this never becomes something they have to fight.
+    window.__musicAutostart=function(){
+      if(reduce || window.__muted || musOn) return;
+      if(LSget('ryan_musoff')==='1') return;
+      var st=cur||PRESETS[0];
+      var a=audio(); a.volume=Math.min(a.volume,0.22);
+      if(elVol) elVol.value=String(Math.round(a.volume*100));
+      play(st);
+    };
+    if(btnMusic) btnMusic.addEventListener('click', function(){
+      // Turning it off from the dock is an explicit opt-out; remember it.
+      if(musOn){ LSset('ryan_musoff','1'); } else { LSset('ryan_musoff','0'); }
+    });
+
+    /* ---------------- ASK ABOUT RYAN ----------------
+       One fetch, one system prompt, streamed. No retrieval layer, no tool loop: the whole
+       corpus is a few hundred words and fits in the prompt, so anything more would be
+       machinery without a job.
+       NOTE: this key ships in the page by design (Ryan's call - free-tier model, rate-limited
+       on OpenRouter's side). Anything in OR_SYSTEM is therefore PUBLIC: keep it to facts that
+       are already on this site. No phone, no address, no student id, no personal socials. */
+    var OR_KEY='sk-or-v1-PASTE_YOUR_OPENROUTER_KEY_HERE';
+    var OR_MODEL='google/gemma-4-31b-it:free';
+    var OR_SYSTEM=[
+      "You are the assistant on Ryan's portfolio site. You answer visitors' questions about Ryan and about this site.",
+      "",
+      "RYAN",
+      "Ryan is Nguyen Minh Khang, 20, based in Ho Chi Minh City, Vietnam. He studies BSc Computer Science at Vietnamese-German University (VGU), intake Winter 2024. Foundation year GPA 8.3/10, rank 'very good'. Standout marks: Exploring of CS 10.0, Information Technology 9.3, Leadership Skill 9.2, Multi-disciplinary Project 9.0.",
+      "Languages: Vietnamese (native), English (IELTS 7.0), German (A2.2), Chinese (HSK 1).",
+      "Stack: Python, C++, TypeScript, JavaScript, and LuaU early on. Tools: PyTorch, Hugging Face, Claude, Gemini, Figma.",
+      "He frames himself with three hats: AI Engineer, Designer, Systems Architect. His line is: 'I'm not a coder who bolts AI on. I'm an AI engineer.' He led a small Roblox game dev team at 15 (summer 2021 to 2022), then moved to the agent layer, and is now pivoting deeper into system design. He audits an agent's skills, tools and MCPs down to the right few.",
+      "",
+      "PROJECTS",
+      "FORGER: a v2 execution-gated framework. Its six letters are its phases: Find, Observe, Recombine, Grill (a cross-model adversarial pass), Execute (done means it ran), Retain. A CONTRACT phase 0 writes the definition-of-works. There is a gate between every phase, no self-grading and no skipping. SkillRouter is a sub-project inside FORGER: RAG-semantic routing that surfaces only the skills a query needs instead of loading every skill into context, which saves memory and tokens. SkillRouter is not the same thing as FORGER.",
+      "EMO / EMOv3: an agentic study assistant. FastAPI, LangGraph, Gemini 2.5, ChromaDB for memory. Team of four, Ryan a contributor. It won 2nd prize at the IU AI Smarter World competition.",
+      "study-deck: an offline FSRS-5 spaced-repetition trainer with a bring-your-own-key AI tutor. Shipped web app. The tutor streams from OpenRouter using the visitor's own key held in localStorage, so it is privacy-first by design.",
+      "LiquidChess: a design system plus chess-engine sandbox. React, react-three-fiber, 3D board, voice picker, a shipped developer API.",
+      "llm-and-engine: tool-calling research. Training, evals, and chess demos, including a custom engine that self-plays.",
+      "Jack-Sparrow: a TypeScript 'Treasure Hunt' built with Spline, live on Vercel.",
+      "Apoc-Popper (also called Quiz Survivors): a 2D top-down pixel zombie survivor where you answer quizzes to earn upgrades and outlast waves. Next.js, Phaser, Supabase. Still unfinished, and Ryan says so.",
+      "",
+      "THIS SITE",
+      "One hand-authored HTML file. No framework, no bundler, no build step: all CSS and JavaScript is inline. GSAP drives the motion.",
+      "The hero portrait is a canvas per-tile flip: a black-and-white ascii portrait sampled from the photo folds away, an Aino-style colour mosaic takes its place, then that folds away to uncover the real photograph. Clicking the word RYAN under the portrait plays the whole thing in reverse. Hovering the portrait paints a spotlight disc that swaps the two media.",
+      "It was built over roughly a week of evenings by operating AI rather than hand-typing every line, which is the point Ryan makes with it: the site is the proof of the workflow, not just a description of it.",
+      "It was verified with real browser automation: frame timing measured on the live site (about 140fps through the hero reveal, one janky frame), canvas pixels sampled to confirm each layer actually renders, and checks that it degrades correctly under reduced motion and without JavaScript.",
+      "",
+      "CONTACT",
+      "Email ryandev1st@gmail.com. GitHub github.com/RyanDev1st. LinkedIn linkedin.com/in/ryandev1st. He is open to work.",
+      "",
+      "RULES",
+      "Be brief. Two to four sentences unless asked for detail. Plain, concrete language.",
+      "Never invent facts about Ryan, his grades, his projects or his availability. If you do not know, say so and point them at his email.",
+      "Do not share any personal contact details beyond the email, GitHub and LinkedIn above.",
+      "If asked something unrelated to Ryan or this site, say that is outside what you cover and steer back.",
+      "Do not use em dashes. Write in a calm, direct voice."
+    ].join('\n');
+
+    var log=document.getElementById('chatLog'), form=document.getElementById('chatForm'),
+        input=document.getElementById('chatInput'), send=document.getElementById('chatSend'),
+        chips=document.getElementById('chatChips');
+    var hist=[], busy=false;
+    function bubble(txt, who){
+      var d=document.createElement('div');
+      d.className='chat__msg chat__msg--'+who; d.textContent=txt;
+      log.appendChild(d); log.scrollTop=log.scrollHeight; return d;
+    }
+    bubble("Ask me about Ryan, his projects, or how this site was built.", 'bot');
+    function ask(q){
+      if(busy || !q) return;
+      if(chips) chips.classList.add('is-gone');
+      bubble(q,'me'); hist.push({role:'user',content:q});
+      busy=true; if(send) send.disabled=true;
+      if(OR_KEY.indexOf('PASTE_YOUR') > -1){
+        bubble("The chat is not connected yet. Ryan needs to add his OpenRouter key. In the meantime his email is ryandev1st@gmail.com.", 'err');
+        busy=false; if(send) send.disabled=false; return;
+      }
+      var out=bubble('','bot');
+      out.innerHTML='<span class="chat__dots"><i></i><i></i><i></i></span>';
+      fetch('https://openrouter.ai/api/v1/chat/completions',{
+        method:'POST',
+        headers:{'Content-Type':'application/json','Authorization':'Bearer '+OR_KEY},
+        body:JSON.stringify({ model:OR_MODEL, stream:true, max_tokens:400, temperature:0.3,
+          messages:[{role:'system',content:OR_SYSTEM}].concat(hist.slice(-8)) })
+      }).then(function(r){
+        if(!r.ok || !r.body) throw new Error('http '+r.status);
+        var rd=r.body.getReader(), dec=new TextDecoder(), buf='', acc='';
+        return (function pump(){
+          return rd.read().then(function(res){
+            if(res.done){ hist.push({role:'assistant',content:acc}); return; }
+            buf+=dec.decode(res.value,{stream:true});
+            var parts=buf.split('\n'); buf=parts.pop();
+            parts.forEach(function(ln){
+              ln=ln.trim(); if(ln.indexOf('data:')!==0) return;
+              var p=ln.slice(5).trim(); if(!p || p==='[DONE]') return;
+              try{ var j=JSON.parse(p), t=j.choices&&j.choices[0]&&j.choices[0].delta&&j.choices[0].delta.content;
+                if(t){ acc+=t; out.textContent=acc; log.scrollTop=log.scrollHeight; }
+              }catch(_){}
+            });
+            return pump();
+          });
+        })();
+      }).catch(function(){
+        out.className='chat__msg chat__msg--err';
+        out.textContent="Could not reach the model just now. Ryan is at ryandev1st@gmail.com.";
+      }).then(function(){
+        if(!out.textContent){ out.className='chat__msg chat__msg--err'; out.textContent='No answer came back. Try rephrasing.'; }
+        busy=false; if(send) send.disabled=false;
+      });
+    }
+    if(form) form.addEventListener('submit', function(e){ e.preventDefault();
+      var q=input.value.trim(); if(!q) return; input.value=''; ask(q); });
+    if(chips) chips.addEventListener('click', function(e){
+      var b=e.target.closest('button'); if(!b) return; ask(b.textContent.trim()); });
   })();
 
   // Nav: shrink to a floating glass pill once scrolled past the top.
