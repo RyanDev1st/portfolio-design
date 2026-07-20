@@ -49,7 +49,7 @@ const KEEP = 60 * 60 * 24 * 365;   // how long a stored reaction lives
 const SUBNET_DAY = 8;
 const ASN_DAY = 40;
 const HOUR_CAP = 30;                 // whole endpoint, any origin
-const POW_BITS = 14;                 // ~16k hashes per submission, sub-second on a real device
+const POW_BITS = 16;                 // ~65k hashes; measured ~0.3s in a real browser. Must match the page.
 const POW_WINDOW = 300;              // seconds a stamp stays valid
 
 const REACTIONS = ['hire', 'solid', 'meh'];

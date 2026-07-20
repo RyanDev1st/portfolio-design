@@ -4721,7 +4721,11 @@
        animation; a flood pays it per request, which turns a free loop into a metered one.
        It is friction, not a bot wall. The wall is the per-network caps in the Worker, and
        Turnstile when Ryan enables it. This is the layer that makes probing those expensive. */
-    var POW_BITS=14;                        // ~16k hashes, measured well under a second
+    // 16 bits = ~65k hashes. MEASURED in a real browser at 214k hashes/sec, so about 0.3s here
+    // and roughly a second on a slow phone. The panel does not wait for it (the note step opens
+    // straight away), so it is invisible, and every doubling of this number doubles what a
+    // flood costs. Raise it if abuse ever shows up; the Worker constant must match.
+    var POW_BITS=16;
     function leadingZeroBits(bytes, want){
       var bits=want, i=0;
       while(bits>=8){ if(bytes[i++]!==0) return false; bits-=8; }
