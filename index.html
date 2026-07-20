@@ -111,11 +111,18 @@
   /* z-index above EVERYTHING, including the boot gate (2000) and the intro overlay. Anything
      that outranks it makes the cursor vanish over that surface, which is exactly where the
      visitor is being asked to click. */
-  .cursor{position:fixed;top:0;left:0;pointer-events:none;z-index:99999;opacity:0;
-    transition:opacity .25s ease}
+  /* The wrapper is deliberately UNPOSITIONED and carries no z-index. `position:fixed` creates a
+     stacking context, and a stacking context is an isolated group: the collision ring below
+     would blend against its empty parent instead of against the page, which is exactly why the
+     first attempt came out red everywhere. The parts are fixed and stacked individually
+     instead, which costs nothing and leaves the blending honest. */
+  .cursor{pointer-events:none;opacity:0;transition:opacity .25s ease}
   html.cur-on .cursor{opacity:1}
   html.cur-on,html.cur-on *{cursor:none!important}
-  .cursor b{position:fixed;top:0;left:0;display:block;border-radius:50%;
+  /* z-index above EVERYTHING, including the boot gate (2000) and the intro overlay. Anything
+     that outranks it makes the cursor vanish over that surface, which is exactly where the
+     visitor is being asked to click. */
+  .cursor b{position:fixed;top:0;left:0;display:block;border-radius:50%;z-index:99999;
     transform:translate(-50%,-50%);will-change:transform}
   /* CONTRAST. The first pass was a 6px dot inside a 1px 34%-opacity ring, which on a near
      black page was almost nothing: fine if you are already tracking it, invisible if your
@@ -129,16 +136,32 @@
     transition:width .3s cubic-bezier(.34,1.56,.64,1),height .3s cubic-bezier(.34,1.56,.64,1),
       border-color .2s ease,background .2s ease,border-radius .2s ease,opacity .2s ease,
       box-shadow .2s ease}
-  /* PARTIAL RED HIGHLIGHT (Ryan). The pale ring disappears where it crosses bright content -
-     the RYAN wordmark, a light project shot - and only THOSE parts of the ring vanish, so the
-     fix has to be per pixel, not per element. This is a second ring in signal red set to
-     `mix-blend-mode:darken`: darken keeps the channel-wise minimum, so over the near-black page
-     it resolves to the page and is invisible, and over anything light it resolves to the red.
-     The two rings are exact complements. Whichever part of the ring the pale one loses, the red
-     one takes, so the arc is always complete and the red appears exactly on the blended
-     segment. No JS, no sampling, no per-frame work. */
-  .cursor__lit{position:absolute;inset:-2px;border-radius:50%;border:2px solid var(--signal);
-    mix-blend-mode:darken;pointer-events:none}
+  /* COLLISION HIGHLIGHT (Ryan). The pale ring disappears exactly where it crosses bright
+     content, and only those parts of it, so the fix has to be per pixel rather than per
+     element. This is an annulus laid over the ring that FILTERS THE BACKDROP instead of
+     painting a colour: sepia collapses whatever is behind it onto a warm axis and the
+     saturation boost drives it to red-amber, but both operations scale with luminance, so
+     near-black stays near-black and only bright pixels light up. The arc therefore burns red
+     precisely where the ring is over white and stays invisible everywhere else. No blend
+     isolation to fight, no sampling, no per-frame JS.
+     The first attempt used `mix-blend-mode:darken`, which is the correct maths but never got
+     the chance to run: `.cursor` is a stacking context, so the child blended against its own
+     empty group instead of the page and the ring simply read as permanently red.
+     Hidden in the hover, press and text states, which already own the ring's colour. */
+  /* COLLISION RING. `mix-blend-mode:darken` keeps the channel-wise minimum of the ring and
+     whatever is behind it. Against the near-black page the page wins and the ring is invisible;
+     against anything light the red wins and the ring burns signal red. So it lights up exactly
+     the arc that is colliding with bright content, per pixel, with no sampling and no per-frame
+     work, and it is silent everywhere else.
+     It sits immediately OUTSIDE the pale ring (34px outer wall meets the pale ring's 30px) and
+     must not overlap it: the pale stroke is itself bright, so darken would resolve against that
+     and the edge would read red at all times, which was the original bug. */
+  .cursor__lit{width:34px;height:34px;border-radius:50%;border:2px solid var(--signal);
+    mix-blend-mode:darken;
+    transition:opacity .2s ease}
+  /* hover, press and text already own the ring's colour, so the collision layer steps back and
+     the states Ryan liked are untouched */
+  .cursor.is-link .cursor__lit,.cursor.is-down .cursor__lit,.cursor.is-text .cursor__lit{opacity:0}
   /* HOVER: the ring opens up, takes the accent and LIGHTS. The dot shrinks so the ring is the
      subject. The glow is what makes it findable from the corner of the eye. */
   .cursor.is-link .cursor__ring{width:46px;height:46px;border-color:var(--signal);
@@ -1429,7 +1452,12 @@
      glyph, which read as a third-party feedback widget bolted onto the page. This one is a
      window in the same family, sitting ABOVE the dock so the two never overlap. */
   .react{position:fixed;right:18px;bottom:calc(66px + env(safe-area-inset-bottom,0px));z-index:1500;
-    width:min(92vw,336px);pointer-events:none}
+    width:min(92vw,336px);pointer-events:none;
+    transition:right .52s cubic-bezier(.22,1,.36,1)}
+  /* parked on the free side while a dock panel owns the corner. Animating `right` past the
+     viewport width slides it across rather than teleporting, and it is one property so the
+     move stays cheap. */
+  .react.is-aside{right:calc(100vw - 372px)}
   .react.is-show{pointer-events:auto}
   /* This is the ONE window that wants something from the visitor, and over the contact
      section's dark red wash the neutral chrome disappeared into the page (Ryan: too blended
@@ -1507,7 +1535,7 @@
 <a class="skip-link" href="#portfolio">Skip to portfolio</a>
 <!-- ONE cursor for the whole site: intro, hook and page. Two parts, because a single dot
      cannot express state: the dot is exact and instant, the ring lags and carries the state. -->
-<div class="cursor" id="cursor" aria-hidden="true"><b class="cursor__ring" id="curRing"><i class="cursor__lit"></i></b><b class="cursor__dot" id="curDot"></b></div>
+<div class="cursor" id="cursor" aria-hidden="true"><b class="cursor__ring" id="curRing"></b><b class="cursor__lit" id="curLit"></b><b class="cursor__dot" id="curDot"></b></div>
 
 <!-- Intro: a one-time welcome video. Plays ONCE PER DEVICE (localStorage, which
      survives the browser closing), BEFORE and separate from the per-SESSION hook.
@@ -4481,7 +4509,8 @@
 
   var cur = document.getElementById('cursor');
   if(cur && matchMedia('(hover:hover)').matches && !matchMedia('(prefers-reduced-motion:reduce)').matches){
-    var curDot=document.getElementById('curDot'), curRing=document.getElementById('curRing');
+    var curDot=document.getElementById('curDot'), curRing=document.getElementById('curRing'),
+        curLit=document.getElementById('curLit');
     var cx=innerWidth/2, cy=innerHeight/2, tx=cx, ty=cy, curRaf=0;
     document.documentElement.classList.add('cur-on');   // only now is the native cursor hidden
     /* The DOT is written straight from the event: a pointer that lags behind the real position
@@ -4490,12 +4519,17 @@
        PERF (do not regress to a forever-loop): the loop used to self-call every frame for the
        whole visit, waking the main thread to move an element that was not even displayed. It
        now runs ONLY while the ring is still catching up and stops the moment it has. */
+    /* The collision layer is a SIBLING of the ring, not a child of it, and it is moved here
+       alongside it. It has to be: `backdrop-filter` reads the backdrop of the nearest ancestor
+       that establishes one, and a transformed ancestor establishes one whose contents are
+       empty. Nested inside the (transformed) ring it filtered nothing and simply never showed. */
+    function place(el,x,y){ el.style.transform='translate('+x+'px,'+y+'px) translate(-50%,-50%)'; }
     function curTick(){
       curRaf=0;
       cx+=(tx-cx)*.19; cy+=(ty-cy)*.19;
-      curRing.style.transform='translate('+cx+'px,'+cy+'px) translate(-50%,-50%)';
+      place(curRing,cx,cy); place(curLit,cx,cy);
       if(Math.abs(tx-cx)>.1 || Math.abs(ty-cy)>.1) curRaf=requestAnimationFrame(curTick);
-      else { cx=tx; cy=ty; curRing.style.transform='translate('+tx+'px,'+ty+'px) translate(-50%,-50%)'; }
+      else { cx=tx; cy=ty; place(curRing,tx,ty); place(curLit,tx,ty); }
     }
     function kickCur(){ if(!curRaf) curRaf=requestAnimationFrame(curTick); }
     addEventListener('pointermove',function(e){
@@ -4628,16 +4662,27 @@
         return 'f'+h.toString(36)+raw.length.toString(36);
       }catch(_){ return ''; }
     }
+    /* The chip goes the instant it is tapped, because most visitors tap and leave. The note is
+       a follow-up on the SAME record: the first response hands back an id and the note carries
+       it, so one visitor produces one row instead of two and spends one attempt instead of two
+       (Ryan saw the duplicate). */
+    var recId=null;
     function post(reaction, text){
       try{
         // keepalive: the tap that sends this is very often the last thing the visitor does on
         // the page, and without it the browser cancels the request as the tab goes away.
+        var body = recId
+          ? { r:reaction, id:recId, note:text||'' }
+          : { r:reaction, note:text||'',
+              host:(location.host||'local'), ref:(document.referrer||'').slice(0,120),
+              mobile:!!(navigator.userAgent&&/Mobi/.test(navigator.userAgent)),
+              dev:deviceId(), fp:fingerprint() };
         fetch(REACT_URL, { method:'POST', keepalive:true,
           headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ r:reaction, note:text||'',
-            host:(location.host||'local'), ref:(document.referrer||'').slice(0,120),
-            mobile:!!(navigator.userAgent&&/Mobi/.test(navigator.userAgent)),
-            dev:deviceId(), fp:fingerprint() }) }).catch(function(){});
+          body: JSON.stringify(body) })
+          .then(function(r){ return r.json(); })
+          .then(function(j){ if(j && j.id) recId=j.id; })
+          .catch(function(){});
       }catch(_){}
     }
     function markSeen(){ try{ if(SS) SS.setItem('ryan_reactseen','1'); }catch(_){} }
@@ -4648,15 +4693,19 @@
           onComplete:function(){ box.hidden=true; box.classList.remove('is-show'); }});
       } else { box.hidden=true; box.classList.remove('is-show'); }
     }
-    // Both this and the dock panels live in the bottom-right corner, so they must never be on
-    // screen together. This one YIELDS: a visitor who has opened the chat is already engaged
-    // and interrupting them with a rating box is exactly the wrong trade. It waits and asks
-    // later instead.
+    /* Both this and the dock panels want the bottom-right corner. Hiding this one whenever a
+       panel was open meant it often never appeared at all (Ryan). So it MOVES instead: with a
+       panel open it slides to the bottom-left, where nothing else lives, and slides back when
+       the corner frees up. Nothing overlaps and nothing is suppressed.
+       Below 760px the panels go full width, so there is no free side and the old wait-and-ask
+       behaviour is the only honest option there. */
     function busy(){ return !!document.querySelector('.panel:not([hidden])'); }
+    function roomy(){ return innerWidth>=760; }
     var waits=0;
     function show(){
       if(shown) return;
-      if(busy() && waits++ < 12){ setTimeout(show, 5000); return; }
+      if(busy() && !roomy() && waits++ < 12){ setTimeout(show, 5000); return; }
+      side(busy());
       shown=true;
       box.hidden=false; box.classList.add('is-show');
       if(G && !reduce){
@@ -4667,17 +4716,29 @@
           transformOrigin:'100% 100%'});
       }
     }
-    /* If a dock panel opens while this is up, it gets out of the way. It does NOT count as
-       shown: yielding is our scheduling decision, not the visitor declining, and treating it
-       as a dismissal meant that opening the chat once silently killed the reaction panel for
-       the rest of the session. It retracts and queues itself again instead. */
-    window.__reactYield=function(){
-      if(picked || box.hidden) return;            // already answered: leave it finished
-      if(G && !reduce) G.to(card,{y:10,scale:.97,autoAlpha:0,duration:.26,ease:'power2.in',
-        onComplete:function(){ box.hidden=true; box.classList.remove('is-show'); }});
-      else { box.hidden=true; box.classList.remove('is-show'); }
-      shown=false; waits=0;
-      setTimeout(show, 6000);
+    // Park on whichever side is free. The slide is a real move, not a hide, so the visitor's
+    // eye follows it rather than losing it.
+    function side(aside){
+      var want = aside && roomy();
+      if(box.classList.contains('is-aside')===want) return;
+      box.classList.toggle('is-aside', want);
+    }
+    /* Called when a dock panel opens or closes. It does NOT mark the panel seen: moving out of
+       the way is our layout decision, not the visitor declining, and treating it as a dismissal
+       meant opening the chat once silently killed the rating box for the rest of the session. */
+    window.__reactYield=function(open){
+      if(picked) return;                              // already answered: leave it finished
+      var aside = arguments.length ? !!open : busy();
+      if(box.hidden){ side(aside); return; }
+      if(!roomy()){                                   // narrow: no free side, so step out and retry
+        if(!aside) return;
+        if(G && !reduce) G.to(card,{y:10,scale:.97,autoAlpha:0,duration:.26,ease:'power2.in',
+          onComplete:function(){ box.hidden=true; box.classList.remove('is-show'); }});
+        else { box.hidden=true; box.classList.remove('is-show'); }
+        shown=false; waits=0; setTimeout(show, 6000);
+        return;
+      }
+      side(aside);
     };
     // The receipt TYPES rather than appearing, for the same reason the boot gate types: this
     // site answers an action with something happening, not with a label swapping in.
@@ -4795,12 +4856,14 @@
       } else { p.el.hidden=true; }
       if(!genie) setMin(k,false);
       if(open===k) open=null;
+      // corner is free again, so the rating box can come back to it
+      try{ if(window.__reactYield) window.__reactYield(false); }catch(_){}
     }
     function show(k){
       if(open && open!==k) close(open,true);
       var p=panels[k]; if(!p) return;
       if(!p.el.hidden){ close(k); try{ playSound('collapse'); }catch(_){} return; }
-      try{ if(window.__reactYield) window.__reactYield(); }catch(_){}   // one window per corner
+      try{ if(window.__reactYield) window.__reactYield(true); }catch(_){}   // one window per corner
       var wasMin=minned[k];
       setMin(k,false);
       p.el.hidden=false; p.btn.setAttribute('aria-expanded','true'); open=k;
@@ -4812,13 +4875,18 @@
          settles. The contents ride along and just resolve, one tween, no stagger. */
       if(G && !reduce){
         var body=p.el.querySelector('.ide');
+        /* IT POPS OUT OF ITS BUBBLE (Ryan). The window grows from the exact centre of the dock
+           tile that opened it, so the tile visibly BECOMES the window instead of a panel
+           appearing somewhere near it. The origin is measured, not assumed: the two tiles sit
+           at different x, and a minimised tile is a different width again. */
+        var pr=p.el.getBoundingClientRect(), br=p.btn.getBoundingClientRect();
+        var ox=pr.width ? ((br.left+br.width/2)-pr.left)/pr.width*100 : 100;
+        var oy=pr.height ? ((br.top+br.height/2)-pr.top)/pr.height*100 : 100;
         G.fromTo(p.el,
-          wasMin?{y:26,x:14,scaleX:.5,scaleY:.28,autoAlpha:0,transformOrigin:'100% 100%'}
-                :{y:14,scale:.9,autoAlpha:0,transformOrigin:'100% 100%'},
-          {y:0,x:0,scale:1,scaleX:1,scaleY:1,autoAlpha:1,duration:.44,
-           ease:'back.out(1.6)',clearProps:'transform'});
+          {scale:.2,autoAlpha:0,transformOrigin:ox+'% '+oy+'%'},
+          {scale:1,autoAlpha:1,duration:.58,ease:'back.out(1.5)',clearProps:'transform'});
         // content resolves a hair behind the shell so the glass reads as filling with light
-        if(body) G.fromTo(body.children,{autoAlpha:0},{autoAlpha:1,duration:.26,ease:'power2.out',delay:.07});
+        if(body) G.fromTo(body.children,{autoAlpha:0},{autoAlpha:1,duration:.3,ease:'power2.out',delay:.13});
       }
       if(k==='chat'){ var ci=document.getElementById('chatInput'); if(ci) try{ ci.focus({preventScroll:true}); }catch(_){} }
     }
